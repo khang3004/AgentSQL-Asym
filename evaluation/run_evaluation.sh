@@ -1,11 +1,11 @@
 # DO NOT CHANGE THIS
-db_root_path='../sqlite/dev_databases/'
+db_root_path='../data_minidev/MINIDEV/dev_databases/'
 num_cpus=16
 meta_time_out=30.0
 # DO NOT CHANGE THIS
 
 # ************************* #
-predicted_sql_path='../sql_result/predict_mini_dev_gpt-4-32k_cot_SQLite.json' # Replace with your predict sql json path
+predicted_sql_path='../llm/exp_result/groq_output_kg/predict_mini_dev_meta-llama_llama-4-scout-17b-16e-instruct_cot_SQLite.json' # Default output path
 # predicted_sql_path='../sql_result/predict_mini_dev_gpt-4-32k_cot_PostgreSQL.json' # Replace with your predict sql json path
 # predicted_sql_path='../sql_result/predict_mini_dev_gpt-4-32k_cot_MySQL.json' # Replace with your predict sql json path
 
@@ -20,10 +20,13 @@ base_name=$(basename "$predicted_sql_path" .json)
 # Define the output log path
 output_log_path="../eval_result/${base_name}.txt"
 
+# Ensure eval_result directory exists
+mkdir -p "../eval_result"
+
 case $sql_dialect in
   "SQLite")
-    diff_json_path="../sqlite/mini_dev_sqlite.jsonl"
-    ground_truth_path="../sqlite/mini_dev_sqlite_gold.sql"
+    diff_json_path="../data_minidev/MINIDEV/mini_dev_sqlite.json"
+    ground_truth_path="../data_minidev/MINIDEV/mini_dev_sqlite_gold.sql"
     ;;
   "PostgreSQL")
     diff_json_path="../postgresql/mini_dev_postgresql.jsonl"
