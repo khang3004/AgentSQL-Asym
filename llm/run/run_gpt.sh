@@ -5,13 +5,14 @@ use_knowledge='True'
 mode='mini_dev' # dev, train, mini_dev
 cot='True'
 
-YOUR_API_KEY='YOUR_API_KEY'
+# Read from Env Variables (loaded via Docker or manually in terminal)
+YOUR_API_KEY=${OPENAI_API_KEY:-"YOUR_API_KEY_HERE"}
 
 # Choose the engine to run, e.g. gpt-4, gpt-4-32k, gpt-4-turbo, gpt-35-turbo, GPT35-turbo-instruct
-engine='gpt-4-turbo'
+engine=${OPENAI_ENGINE:-'gpt-4-turbo'}
 
 # Choose the number of threads to run in parallel, 1 for single thread
-num_threads=3
+num_threads=${NUM_THREADS:-3}
 
 # Choose the SQL dialect to run, e.g. SQLite, MySQL, PostgreSQL
 # PLEASE NOTE: You have to setup the database information in table_schema.py 
