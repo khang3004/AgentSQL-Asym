@@ -5,7 +5,7 @@ import argparse
 import multiprocessing as mp
 from func_timeout import func_timeout, FunctionTimedOut
 from evaluation_utils import (
-    load_jsonl,
+    load_json,
     execute_sql,
     package_sqls,
     sort_results,
@@ -148,7 +148,8 @@ def compute_ves(exec_results):
 
 def compute_ves_by_diff(exec_results, diff_json_path):
     num_queries = len(exec_results)
-    contents = load_jsonl(diff_json_path)
+    results = [res["res"] for res in exec_results]
+    contents = load_json(diff_json_path)
     simple_results, moderate_results, challenging_results = [], [], []
     for i, content in enumerate(contents):
         if content["difficulty"] == "simple":
