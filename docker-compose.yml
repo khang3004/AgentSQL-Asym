@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  llm-eval:
+    build: .
+    container_name: bird-sql-worker
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    networks:
+      - bird-net
+    depends_on:
+      - postgres-db
+      - mysql-db
+    command: tail -f /dev/null
+
+  mysql-db:
+    image: mysql:8.4
+    container_name: bird-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-BIRD}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - bird-net
+
+  postgres-db:
+    image: postgres:14
+    container_name: bird-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-BIRD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - bird-net
+
+volumes:
+  mysql-data:
+  postgres-data:
+
+networks:
+  bird-net:
+    driver: bridge
