@@ -1,0 +1,3 @@
+[submodule "MAGIC_reference_code"]
+	path = MAGIC_reference_code
+	url = https://github.com/microsoft/SynQo
