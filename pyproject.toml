@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv",
     "google-genai",
     "groq",
+    "gdown",
 ]
 
 [build-system]

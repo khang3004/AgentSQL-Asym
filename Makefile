@@ -27,6 +27,11 @@ down:
 	@echo "Stopping and removing services..."
 	docker compose down
 
+.PHONY: pull-data
+pull-data:
+	@echo "Pulling dataset using gdown..."
+	docker compose exec llm-eval bash -c "sh scripts/pull_data.sh"
+
 shell:
 	@echo "Opening bash shell in the llm-eval container..."
 	docker compose exec llm-eval bash
