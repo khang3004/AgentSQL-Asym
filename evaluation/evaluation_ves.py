@@ -150,6 +150,8 @@ def compute_ves_by_diff(exec_results, diff_json_path):
     num_queries = len(exec_results)
     results = [res["res"] for res in exec_results]
     contents = load_json(diff_json_path)
+    if len(exec_results) < len(contents):
+        contents = contents[:len(exec_results)]
     simple_results, moderate_results, challenging_results = [], [], []
     for i, content in enumerate(contents):
         if content["difficulty"] == "simple":
@@ -204,6 +206,7 @@ if __name__ == "__main__":
     args_parser.add_argument("--diff_json_path", type=str, default="")
     args_parser.add_argument("--sql_dialect", type=str, default="SQLite")
     args_parser.add_argument("--output_log_path", type=str, default="SQLite")
+    args_parser.add_argument("--num_samples", type=int, default=None)
     args = args_parser.parse_args()
     exec_result = []
 
@@ -218,6 +221,12 @@ if __name__ == "__main__":
         args.db_root_path,
         mode="gt",
     )
+    
+    if args.num_samples is not None:
+        pred_queries = pred_queries[:args.num_samples]
+        gt_queries = gt_queries[:args.num_samples]
+        db_paths_gt = db_paths_gt[:args.num_samples]
+        
     query_pairs = list(zip(pred_queries, gt_queries))
     run_sqls_parallel(
         query_pairs,
