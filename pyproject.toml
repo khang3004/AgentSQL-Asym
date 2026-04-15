@@ -16,6 +16,9 @@ dependencies = [
     "google-genai",
     "groq",
     "gdown",
+    "langgraph>=0.2.0",
+    "langchain-core>=0.2.0",
+    "google-generativeai",
 ]
 
 [build-system]

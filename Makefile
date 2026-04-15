@@ -36,6 +36,16 @@ shell:
 	@echo "Opening bash shell in the llm-eval container..."
 	docker compose exec llm-eval bash
 
+sync-deps:
+	@echo "Syncing new dependencies inside the container..."
+	docker compose exec llm-eval bash -c "uv pip install -r pyproject.toml --system"
+
+NUM_SAMPLES ?= 10
+
+test-magic: sync-deps
+	@echo "Testing MAGIC LangGraph on $(NUM_SAMPLES) samples..."
+	docker compose exec llm-eval bash -c "python3 llm/src/graph_orchestrator.py --num_samples $(NUM_SAMPLES)"
+
 # -------- CLEANUP --------
 clean:
 	@echo "Cleaning up generated files and cached outputs..."
