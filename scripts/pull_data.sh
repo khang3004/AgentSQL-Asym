@@ -1,11 +1,11 @@
 #!/bin/bash
-# Script to automate downloading BIRD Mini-Dev dataset from Google Drive
+# Script to automate downloading BIRD Mini-Dev dataset from Google Drive (Recommend use Huggingface for downloading)
 # and extracting it into the correct logical structure.
 
 set -e
 
 DATA_DIR="data_minidev"
-DRIVE_FILE_ID="13VLWIwpw5E3d5DUkMvzw7hvHE67a4XkG"
+DRIVE_FILE_ID="13VLWIwpw5E3d5DUkMvzw7hvHE67a4XkG" # Magic Variable (DO NOT TOUCH!!!)
 ZIP_NAME="MINIDEV.zip"
 
 echo "======================================================"

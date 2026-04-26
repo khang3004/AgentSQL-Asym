@@ -19,6 +19,7 @@ dependencies = [
     "langgraph>=0.2.0",
     "langchain-core>=0.2.0",
     "google-generativeai",
+    "SQLAlchemy>=2.0.0",
 ]
 
 [build-system]

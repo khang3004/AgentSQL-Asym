@@ -11,7 +11,7 @@ setup: .env
 	curl -LsSf https://astral.sh/uv/install.sh | sh
 	uv venv .venv
 	uv pip install -r pyproject.toml
-	@echo "\nEnvironment setup complete. Run 'source .venv/bin/activate' to use it."
+	@echo "\nEnvironment setup complete. Run 'source .venv/bin/activate' to use it."	
 
 # -------- DOCKER --------
 build:
@@ -42,9 +42,15 @@ sync-deps:
 
 NUM_SAMPLES ?= 10
 
-test-magic: sync-deps
-	@echo "Testing MAGIC LangGraph on $(NUM_SAMPLES) samples..."
-	docker compose exec llm-eval bash -c "python3 llm/src/graph_orchestrator.py --num_samples $(NUM_SAMPLES)"
+# -------- NEW: AgentSQL MULTI-AGENT PIPELINE --------
+test-agentsql: sync-deps
+	@echo "Testing AgentSQL (Asymmetric Framework) on $(NUM_SAMPLES) samples..."
+	docker compose exec llm-eval bash -c "python3 llm/src/smoke_test_agent.py"
+
+# -------- ORIGINAL: MONOLITHIC EVALUATION --------
+eval-monolithic: sync-deps
+	@echo "Running BIRD monolithic pipeline evaluation (EX, VES, F1)..."
+	docker compose exec llm-eval bash -c "cd evaluation && sh run_evaluation.sh"
 
 # -------- CLEANUP --------
 clean:
