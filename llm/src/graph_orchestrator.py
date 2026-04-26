@@ -132,9 +132,7 @@ def schema_exploration_node(state: AgentState) -> dict:
         sqlite3.OperationalError: If the database file at ``state["db_path"]``
             cannot be opened or queried.
     """
-    logger.info(
-        "[schema_exploration_node] Fetching schema for db: %s", state["db_path"]
-    )
+    logger.info("[schema_exploration_node] Fetching schema for db: %s", state["db_path"])
 
     # --- MCP stub: replace with real MCP tool invocation ---
     schema_lines: list[str] = []
@@ -143,9 +141,7 @@ def schema_exploration_node(state: AgentState) -> dict:
         cursor = conn.cursor()
 
         # Retrieve all CREATE TABLE statements
-        cursor.execute(
-            "SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;"
-        )
+        cursor.execute("SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;")
         rows = cursor.fetchall()
         for table_name, create_sql in rows:
             if create_sql:
@@ -202,28 +198,26 @@ def sql_generation_node(state: AgentState) -> dict:
         A partial state dict containing the updated ``generated_sql`` key and
         a reset ``execution_feedback`` (cleared so the sandbox always re-runs).
     """
-    logger.info(
-        "[sql_generation_node] Generating SQL for question: %s", state["question"]
-    )
+    logger.info("[sql_generation_node] Generating SQL for question: %s", state["question"])
 
     import os
     import re
     from groq import Groq
-
+    
     client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-
+    
     prompt = f"""You are an expert SQL Generator.
 Database Schema and Sample Rows:
-{state["schema_context"]}
+{state['schema_context']}
 
-Question: {state["question"]}
+Question: {state['question']}
 
 Please generate a valid SQLite query to answer the question. 
 Output ONLY the SQL code inside ```sql ... ``` block and nothing else.
 """
     if state["guideline"]:
         prompt += f"\nFollow these Correction Guidelines:\n{state['guideline']}"
-
+        
     try:
         response = client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
@@ -232,7 +226,7 @@ Output ONLY the SQL code inside ```sql ... ``` block and nothing else.
             max_tokens=1024,
         )
         content = response.choices[0].message.content
-
+        
         # Simple extraction of SQL from markdown fences
         match = re.search(r"```sql\n(.*?)```", content, re.DOTALL | re.IGNORECASE)
         if match:
@@ -302,7 +296,8 @@ def execution_sandbox_node(state: AgentState) -> dict:
         )
     except sqlite3.Error as exc:
         feedback = (
-            f"SQLiteError({type(exc).__name__}): {exc} | OffendingSQL: {sql[:200]}"
+            f"SQLiteError({type(exc).__name__}): {exc} "
+            f"| OffendingSQL: {sql[:200]}"
         )
         logger.warning("[execution_sandbox_node] Execution failed: %s", feedback)
     # ------------------------------------------------------
@@ -363,14 +358,15 @@ def feedback_correction_node(state: AgentState) -> dict:
 
     import os
     import re
-    import google.generativeai as genai
-
-    genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-    model = genai.GenerativeModel("gemini-2.5-flash")  # using latest gemini
-
+    from google import genai
+    
+    # The new SDK automatically picks up GEMINI_API_KEY from the environment
+    client = genai.Client()
+    gemini_model_name = "gemini-2.5-flash"
+    
     # --- Feedback phase ---
     feedback_prompt = f"""You are an Expert AI Database Architect.
-Original Question: {state["question"]}
+Original Question: {state['question']}
 Failed SQL Query: {original_sql}
 Execution Error: {error_log}
 
@@ -381,8 +377,11 @@ and suggest exactly how to fix it for SQLite.
         feedback_prompt += f"\nAlso, account for these previous historic guideliens:\n{state['guideline']}"
 
     try:
-        feedback_response = model.generate_content(feedback_prompt)
-        feedback_text: str = feedback_response.text
+        feedback_response = client.models.generate_content(
+            model=gemini_model_name,
+            contents=feedback_prompt
+        )
+        feedback_text: str = feedback_response.text or ""
         logger.info("[feedback_correction_node] Feedback text generated.")
     except Exception as exc:
         logger.error("[feedback_correction_node] Gemini feedback error: %s", exc)
@@ -391,9 +390,9 @@ and suggest exactly how to fix it for SQLite.
     # --- Correction phase ---
     correction_prompt = f"""You are an Expert AI Database Architect.
 Database Schema:
-{state["schema_context"]}
+{state['schema_context']}
 
-Original Question: {state["question"]}
+Original Question: {state['question']}
 Failed SQL Query: {original_sql}
 Expert Analysis Feedback: {feedback_text}
 
@@ -401,8 +400,11 @@ Based on the expert feedback, rewrite the SQL query so it works perfectly in SQL
 Output ONLY the SQL code inside ```sql ... ``` block and nothing else.
 """
     try:
-        correction_response = model.generate_content(correction_prompt)
-        content_corr = correction_response.text
+        correction_response = client.models.generate_content(
+            model=gemini_model_name,
+            contents=correction_prompt
+        )
+        content_corr = correction_response.text or ""
         match = re.search(r"```sql\n(.*?)```", content_corr, re.DOTALL | re.IGNORECASE)
         if match:
             corrected_sql = match.group(1).strip()
@@ -410,11 +412,11 @@ Output ONLY the SQL code inside ```sql ... ``` block and nothing else.
             corrected_sql = content_corr.strip().replace("\n", " ")
     except Exception as exc:
         logger.error("[feedback_correction_node] Gemini correction error: %s", exc)
-        corrected_sql = original_sql  # fallback on error
+        corrected_sql = original_sql # fallback on error
     # ------------------------------------------
 
     logger.info(
-        "[feedback_correction_node] Corrected SQL (stub): %s", corrected_sql[:120]
+        "[feedback_correction_node] Corrected SQL: %s", corrected_sql[:120]
     )
     return {
         "generated_sql": corrected_sql,
@@ -427,9 +429,7 @@ Output ONLY the SQL code inside ```sql ... ``` block and nothing else.
 # ---------------------------------------------------------------------------
 
 
-def should_continue(
-    state: AgentState,
-) -> Literal["feedback_correction_node", "__end__"]:
+def should_continue(state: AgentState) -> Literal["feedback_correction_node", "__end__"]:
     """Determine the next node after the execution sandbox.
 
     Routing logic (mirrors MAGIC manager-agent termination criteria):
@@ -544,17 +544,12 @@ if __name__ == "__main__":
     import argparse
     from dotenv import load_dotenv
 
-    # Load environment variables just in case it's run locally.
+    # Load environment variables just in case it's run locally. 
     # Docker already injects from .env.
     load_dotenv()
-
+    
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--num_samples",
-        type=int,
-        default=10,
-        help="Number of questions to test in this execution.",
-    )
+    parser.add_argument("--num_samples", type=int, default=10, help="Number of questions to test in this execution.")
     args = parser.parse_args()
 
     # -----------------------------------------------------------------
@@ -572,7 +567,7 @@ if __name__ == "__main__":
         dataset = json.load(_f)
 
     # We test on exactly num_samples questions
-    test_subset = dataset[: args.num_samples]
+    test_subset = dataset[:args.num_samples]
 
     logger.info("=== Compiling MAGIC Graph ===")
     graph = compile_graph()
@@ -580,14 +575,9 @@ if __name__ == "__main__":
     results_collection = []
 
     for idx, sample in enumerate(test_subset):
-        logger.info("\n\n" + "=" * 50)
-        logger.info(
-            "Processing Sample %d / %d | Question ID: %s",
-            idx + 1,
-            args.num_samples,
-            sample.get("question_id", idx),
-        )
-
+        logger.info("\n\n" + "="*50)
+        logger.info("Processing Sample %d / %d | Question ID: %s", idx + 1, args.num_samples, sample.get('question_id', idx))
+        
         db_id: str = sample["db_id"]
         db_path: str = os.path.join(_DB_ROOT, db_id, f"{db_id}.sqlite")
 
@@ -597,7 +587,7 @@ if __name__ == "__main__":
             "schema_context": "",
             "generated_sql": "",
             "execution_feedback": "",
-            "guideline": "",  # inject MAGIC guideline here when available
+            "guideline": "",   # inject MAGIC guideline here when available
             "iteration_count": 0,
         }
 
@@ -608,26 +598,24 @@ if __name__ == "__main__":
         logger.info("Generated SQL  : %s", final_state["generated_sql"])
         logger.info("Exec Feedback  : %s", final_state["execution_feedback"])
         logger.info("Iterations     : %d", final_state["iteration_count"])
-
+        
         # Save to collection
-        results_collection.append(
-            {
-                "question_id": sample.get("question_id", idx),
-                "question": final_state["question"],
-                "db_id": db_id,
-                "final_sql": final_state["generated_sql"],
-                "execution_status": final_state["execution_feedback"],
-                "iterations_used": final_state["iteration_count"],
-            }
-        )
+        results_collection.append({
+            "question_id": sample.get('question_id', idx),
+            "question": final_state["question"],
+            "db_id": db_id,
+            "final_sql": final_state["generated_sql"],
+            "execution_status": final_state["execution_feedback"],
+            "iterations_used": final_state["iteration_count"]
+        })
 
     # Save output summarizing the run
     out_dir = os.path.join(os.path.dirname(__file__), "../exp_result/magic_output")
     os.makedirs(out_dir, exist_ok=True)
     out_file = os.path.join(out_dir, "test_10_samples_magic.json")
-
+    
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(results_collection, f, indent=4)
-
+        
     logger.info("========================================")
     logger.info("Smoke test complete! Results saved to: %s", out_file)
