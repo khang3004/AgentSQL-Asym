@@ -1,5 +1,12 @@
 .PHONY: setup build up down shell clean
 
+# Load environment variables if .env exists
+-include .env
+export
+
+# Default parameters if not set in .env
+NUM_SAMPLES ?= 10
+
 # Generate .env file from .env.example if it doesn't exist
 .env:
 	cp .env.example .env
@@ -40,12 +47,22 @@ sync-deps:
 	@echo "Syncing new dependencies inside the container..."
 	docker compose exec llm-eval bash -c "uv pip install -r pyproject.toml --system"
 
-NUM_SAMPLES ?= 10
-
 # -------- NEW: AgentSQL MULTI-AGENT PIPELINE --------
+
 test-agentsql: sync-deps
-	@echo "Testing AgentSQL (Asymmetric Framework) on $(NUM_SAMPLES) samples..."
-	docker compose exec llm-eval bash -c "python3 llm/src/smoke_test_agent.py"
+	@echo "Testing AgentSQL (Smoke Test) to ensure graph logic is functional..."
+	docker compose exec -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 llm/src/smoke_test_agent.py"
+
+eval-agentsql: sync-deps
+	@echo "Evaluating AgentSQL flow on Mini-Dev Dataset..."
+	@echo "Generator: $(GENERATOR_PROVIDER)/$(GENERATOR_MODEL)"
+	@echo "Critic: $(CRITIC_PROVIDER)/$(CRITIC_MODEL)"
+	docker compose exec -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 research/evaluator.py --num_samples $(NUM_SAMPLES)"
+
+compare-sota:
+	@echo "Comparing AgentSQL results against SoTA baselines (Mode A, Mode B)..."
+	@echo "NOTE: Ensure that results/agentsql_evaluation.json has been generated via 'make eval-agentsql'!"
+	docker compose exec llm-eval bash -c "python3 research/compare_sota.py"
 
 # -------- ORIGINAL: MONOLITHIC EVALUATION --------
 eval-monolithic: sync-deps
@@ -57,3 +74,4 @@ clean:
 	@echo "Cleaning up generated files and cached outputs..."
 	rm -rf .venv
 	find . -type d -name "__pycache__" -exec rm -rf {} +
+
