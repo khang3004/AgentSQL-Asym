@@ -1,2 +1,36 @@
+# OS files
 .DS_Store
-/data_minidev/*
+.DS_Store?
+._*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+ENV/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment variables
+.env
+
+# Data directories
+data_minidev/
+mini_dev_data/
+llm/mini_dev_data/
+*.sqlite
+*.db
+
+# Evaluation Results & Outputs
+eval_result/
+exp_result/
+llm/exp_result/
+*.log
