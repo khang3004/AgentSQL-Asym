@@ -4,8 +4,8 @@ import re
 import logging
 from typing import Dict, Any
 
-from text2sql_agent.core.state import AgentState
-from text2sql_agent.core.llm_factory import get_llm
+from ..core.state import AgentState
+from ..core.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
 

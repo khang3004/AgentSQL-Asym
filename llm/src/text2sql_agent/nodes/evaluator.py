@@ -4,8 +4,8 @@ import os
 import logging
 from typing import Dict, Any
 
-from text2sql_agent.core.state import AgentState
-from text2sql_agent.tools.sandbox import EphemeralSandbox
+from ..core.state import AgentState
+from ..tools.sandbox import EphemeralSandbox
 
 logger = logging.getLogger(__name__)
 

@@ -4,11 +4,11 @@ import logging
 from typing import Literal
 from langgraph.graph import StateGraph, END
 
-from text2sql_agent.core.state import AgentState
-from text2sql_agent.nodes.explorer import explorer_node
-from text2sql_agent.nodes.generator import generator_node
-from text2sql_agent.nodes.evaluator import evaluator_node
-from text2sql_agent.nodes.corrector import corrector_node
+from ..core.state import AgentState
+from ..nodes.explorer import explorer_node
+from ..nodes.generator import generator_node
+from ..nodes.evaluator import evaluator_node
+from ..nodes.corrector import corrector_node
 
 logger = logging.getLogger(__name__)
 

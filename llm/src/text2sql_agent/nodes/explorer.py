@@ -3,8 +3,8 @@
 import logging
 from typing import Dict, Any
 
-from text2sql_agent.core.state import AgentState
-from text2sql_agent.tools.mcp_client import MCPDatabaseClient
+from ..core.state import AgentState
+from ..tools.mcp_client import MCPDatabaseClient
 
 logger = logging.getLogger(__name__)
 

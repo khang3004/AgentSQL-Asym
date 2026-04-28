@@ -1,0 +1,81 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{settings/hcmus_paper}[2026/03/19 V1.0 Custom Paper Style]
+
+% -----------------------------------------------------------------------------
+% 1. CORE PACKAGES & TYPOGRAPHY
+% -----------------------------------------------------------------------------
+\RequirePackage[utf8]{inputenc}
+\RequirePackage{lmodern}           % High-quality Latin Modern fonts
+\RequirePackage{microtype}         % Enhances typography and justification
+\RequirePackage{hyperref}          % Clickable links and cross-references
+\hypersetup{
+    colorlinks=true,
+    linkcolor=DeepBlue,
+    citecolor=codeGreen,
+    urlcolor=techBlue
+}
+
+% -----------------------------------------------------------------------------
+% 2. MATHEMATICS & ALGORITHMS
+% -----------------------------------------------------------------------------
+\RequirePackage{amsmath, amssymb, mathtools} % Advanced math environments
+\RequirePackage{bm}                          % Bold math symbols
+
+% -----------------------------------------------------------------------------
+% 3. GRAPHICS & TABLES
+% -----------------------------------------------------------------------------
+\RequirePackage{graphicx}          % Image rendering
+\RequirePackage{booktabs}          % Professional tables (top/mid/bottom rules)
+\RequirePackage{multirow}          % Spanning multiple rows in tables
+\RequirePackage{caption}
+\RequirePackage{subcaption}        % Side-by-side figures
+
+% Set default path for graphics
+\graphicspath{{./figures/}}
+
+% -----------------------------------------------------------------------------
+% 4. COLOR PALETTE DEFINITIONS
+% -----------------------------------------------------------------------------
+\RequirePackage{xcolor}
+\definecolor{techBlue}{RGB}{0, 85, 150}
+\definecolor{alertRed}{RGB}{200, 30, 30}
+\definecolor{codeGreen}{RGB}{0, 150, 80}
+\definecolor{DeepBlue}{RGB}{0, 51, 102}
+
+% -----------------------------------------------------------------------------
+% 5. CUSTOM MACROS (DECORATORS & MATH ALIASES)
+% -----------------------------------------------------------------------------
+
+% @macro: \E
+% @brief: Symbol for Statistical Expectation.
+% @return: Mathbb 'E'
+\DeclareMathOperator{\E}{\mathbb{E}}
+
+% @macro: \Var
+% @brief: Symbol for Variance.
+\DeclareMathOperator{\Var}{Var}
+
+% @macro: \vect
+% @brief: Formats a variable as a bold vector.
+% @param: #1 {string} The vector variable (e.g., x).
+\newcommand{\vect}[1]{\mathbf{#1}}
+
+% @macro: \R
+% @brief: Symbol for Real number space.
+\newcommand{\R}{\mathbb{R}}
+
+% @macro: \abs
+% @brief: Absolute value with auto-sizing delimiters.
+\DeclarePairedDelimiter{\abs}{\lvert}{\rvert}
+
+% @macro: \highlight
+% @brief: Emphasizes crucial terminology in the text.
+% @param: #1 {string} The text to be highlighted.
+\newcommand{\highlight}[1]{\textbf{\textcolor{techBlue}{#1}}}
+
+% @macro: \todo
+% @brief: Drops a visible, inline marker for pending tasks (useful for team collab).
+% @param: #1 {string} The task description.
+\newcommand{\todo}[1]{\textcolor{alertRed}{\textbf{[TODO: #1]}}}
+
+\endinput
