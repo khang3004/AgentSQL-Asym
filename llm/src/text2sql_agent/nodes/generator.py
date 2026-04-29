@@ -24,8 +24,13 @@ def generator_node(state: AgentState) -> Dict[str, Any]:
     
     logger.info("[generator_node] Generating initial SQL for question: %s", question)
     
+    import os
+    
+    gen_provider = os.environ.get("GENERATOR_PROVIDER", "groq")
+    gen_model = os.environ.get("GENERATOR_MODEL", "llama3-70b-8192")
+    
     # Asymmetric Architecture: Fast/Cheap model for Generation
-    llm = get_llm(role="generator", provider="groq", model_name="meta-llama/llama-4-scout-17b-16e-instruct")
+    llm = get_llm(role="generator", provider=gen_provider, model_name=gen_model)
     
     prompt = f"""You are an Expert AI Database Engineer.
 Your task is to write a syntactically correct SQL query.

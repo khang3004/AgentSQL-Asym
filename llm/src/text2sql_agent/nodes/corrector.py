@@ -28,8 +28,13 @@ def corrector_node(state: AgentState) -> Dict[str, Any]:
     
     logger.info("[corrector_node] Correction attempt #%d.", iteration_count + 1)
     
+    import os
+    
+    critic_provider = os.environ.get("CRITIC_PROVIDER", "google")
+    critic_model = os.environ.get("CRITIC_MODEL", "gemini-2.5-flash")
+    
     # Asymmetric Architecture: Powerful reasoning model for Correction
-    llm = get_llm(role="critic", provider="google", model_name="gemini-2.5-flash")
+    llm = get_llm(role="critic", provider=critic_provider, model_name=critic_model)
     
     # 1. Feedback Generation Phase
     feedback_prompt = f"""You are an Expert AI Database Architect.

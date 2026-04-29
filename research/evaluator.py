@@ -13,7 +13,8 @@ from statistics import mean
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from llm.src.graph_orchestrator import compile_graph, AgentState
+from llm.src.text2sql_agent.workflow.graph import compile_workflow
+from llm.src.text2sql_agent.core.state import AgentState
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ def compare_results(sql1: str, sql2: str, db_path: str) -> bool:
 
 def evaluate_agent_sql(dataset: list, db_root: str):
     logger.info("Starting AgentSQL Evaluation")
-    graph = compile_graph()
+    graph = compile_workflow()
     
     total_tokens = 0
     latencies = []
@@ -52,6 +53,7 @@ def evaluate_agent_sql(dataset: list, db_root: str):
             "execution_feedback": "",
             "guideline": "",
             "iteration_count": 0,
+            "ground_truth_sql": sample.get("SQL", ""),
         }
         
         start_time = time.time()

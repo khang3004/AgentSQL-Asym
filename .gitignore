@@ -13,6 +13,9 @@ venv/
 env/
 ENV/
 
+#Documents
+docs/
+
 # IDEs
 .idea/
 .vscode/
