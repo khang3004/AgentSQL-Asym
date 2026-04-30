@@ -4,6 +4,8 @@ import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
+from ..core.sql_utils import is_readonly_select
+
 logger = logging.getLogger(__name__)
 
 class EphemeralSandbox:
@@ -26,7 +28,7 @@ class EphemeralSandbox:
             str: 'SUCCESS' if results match. 'Result Mismatch: Expected X, got Y' if execution succeeds but data differs.
                  'Execution Error: [details]' on Syntax/Runtime exceptions.
         """
-        if not predicted_sql or "SELECT" not in predicted_sql.upper():
+        if not is_readonly_select(predicted_sql):
              return "Execution Error: Predicted SQL is empty or not a SELECT statement."
              
         try:
@@ -36,14 +38,18 @@ class EphemeralSandbox:
                 # 1. Execute Ground Truth securely
                 try:
                     gt_result = conn.execute(text(ground_truth_sql))
-                    gt_rows = set(gt_result.fetchall())
+                    gt_columns = list(gt_result.keys())
+                    gt_rows_raw = gt_result.fetchall()
+                    gt_rows = set(gt_rows_raw)
                 except SQLAlchemyError as gt_err:
                     return f"Ground Truth Execution Error: The provided GT query is invalid: {gt_err}"
                 
                 # 2. Execute Prediction securely
                 try:
                     pred_result = conn.execute(text(predicted_sql))
-                    pred_rows = set(pred_result.fetchall())
+                    pred_columns = list(pred_result.keys())
+                    pred_rows_raw = pred_result.fetchall()
+                    pred_rows = set(pred_rows_raw)
                 except SQLAlchemyError as pred_err:
                     return f"Execution Error: {type(pred_err).__name__}: {pred_err} | OffendingSQL: {predicted_sql}"
 
@@ -51,7 +57,15 @@ class EphemeralSandbox:
             if gt_rows == pred_rows:
                 return "SUCCESS"
             else:
-                return f"Result Mismatch: Expected {gt_rows}, got {pred_rows}. | OffendingSQL: {predicted_sql}"
+                missing = list(gt_rows - pred_rows)[:5]
+                extra = list(pred_rows - gt_rows)[:5]
+                return (
+                    "Result Mismatch: "
+                    f"expected_columns={gt_columns}, predicted_columns={pred_columns}, "
+                    f"expected_count={len(gt_rows_raw)}, predicted_count={len(pred_rows_raw)}, "
+                    f"missing_expected_sample={missing}, extra_predicted_sample={extra}. "
+                    f"OffendingSQL: {predicted_sql}"
+                )
 
         except Exception as e:
             logger.error(f"[EphemeralSandbox] Unexpected sandbox failure for URI {db_uri}: {e}")

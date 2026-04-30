@@ -28,6 +28,7 @@ def main():
     
     initial_state = {
         "question": "What is the ratio of customers who pay in EUR against customers who pay in CZK?",
+        "evidence": "ratio of customers who pay in EUR against customers who pay in CZK = count(Currency = 'EUR') / count(Currency = 'CZK').",
         "db_path": dev_db_path,
         "schema_context": "",
         "generated_sql": "",

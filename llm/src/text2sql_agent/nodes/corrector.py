@@ -1,13 +1,24 @@
 """Module containing the Corrector Node using the LLM factory."""
 
-import re
 import logging
 from typing import Dict, Any
 
 from ..core.state import AgentState
 from ..core.llm_factory import get_llm
+from ..core.sql_utils import extract_sql
 
 logger = logging.getLogger(__name__)
+
+MAGIC_SELF_CHECK_GUIDELINES = """Common Text-to-SQL correction checks:
+1. LIMIT/ORDER BY: for "top", "most", "least", "highest", "lowest", order by the metric and limit when one entity is requested.
+2. Aggregation: for averages per entity, aggregate per entity in a subquery before averaging.
+3. Ratios/division: use conditional SUM/COUNT and CAST the numerator or denominator to FLOAT.
+4. Filters: verify every literal against sample values and column descriptions; do not invent status/category values.
+5. Dates: match the storage format; use date()/SUBSTR()/strftime() or half-open ranges instead of fragile LIKE when appropriate.
+6. Joins: use foreign keys or id columns, and avoid DISTINCT unless duplicate join rows would change the requested semantics.
+7. Projection: select only the columns requested by the question; count the requested unit, not arbitrary rows.
+8. Extremes: if ties are semantically possible, prefer equality to MIN/MAX subqueries unless the benchmark expects one row via LIMIT.
+"""
 
 def corrector_node(state: AgentState) -> Dict[str, Any]:
     """
@@ -21,6 +32,7 @@ def corrector_node(state: AgentState) -> Dict[str, Any]:
     """
     question = state["question"]
     schema = state["schema_context"]
+    evidence = state.get("evidence", "")
     error_feedback = state["execution_feedback"]
     bad_sql = state["generated_sql"]
     current_guideline = state.get("guideline", "")
@@ -36,48 +48,45 @@ def corrector_node(state: AgentState) -> Dict[str, Any]:
     # Asymmetric Architecture: Powerful reasoning model for Correction
     llm = get_llm(role="critic", provider=critic_provider, model_name=critic_model)
     
-    # 1. Feedback Generation Phase
-    feedback_prompt = f"""You are an Expert AI Database Architect.
-Query: {question}
-Schema: {schema}
-Generated SQL: {bad_sql}
-Execution Feedback: {error_feedback}
+    correction_prompt = f"""You are an expert SQLite Text-to-SQL self-correction agent.
+Your goal is execution accuracy. Repair the failed query using the schema, hint, execution feedback, and MAGIC-style checklist.
 
-Analyze the error. Explain WHY the execution failed or resulted in a semantic mismatch, and provide clear strategic steps to fix it.
-"""
-    if current_guideline:
-         feedback_prompt += f"\nAccount for past guidelines:\n{current_guideline}"
-         
-    try:
-        analytical_feedback = llm.generate(feedback_prompt)
-        logger.info("[corrector_node] Analytical feedback string built.")
-    except Exception as exc:
-        logger.error("[corrector_node] Critic feedback phase error: %s", exc)
-        analytical_feedback = f"Error generating analytical feedback: {exc}"
-        
-    # 2. Correction Phase
-    correction_prompt = f"""You are an Expert AI Database Architect.
-Query: {question}
-Schema: {schema}
-Error Context: {error_feedback}
-Analytical Guidelines: {analytical_feedback}
+Question:
+{question}
 
-Rewrite the SQL query to perfectly answer the user's question and fix the errors.
-Output ONLY the SQL code inside ```sql ... ``` block and nothing else."""
+Evidence/hint:
+{evidence or "None"}
+
+Schema and sample values:
+{schema}
+
+Previous SQL:
+```sql
+{bad_sql}
+```
+
+Execution feedback:
+{error_feedback}
+
+MAGIC correction checklist:
+{MAGIC_SELF_CHECK_GUIDELINES}
+
+Past local feedback:
+{current_guideline or "None"}
+
+Think through the mismatch privately, then output only one corrected read-only SQLite query in a ```sql block."""
 
     corrected_sql = bad_sql
+    analytical_feedback = self_feedback = f"iter={iteration_count + 1}: {error_feedback[:700]}"
     try:
         content_corr = llm.generate(correction_prompt)
-        match = re.search(r"```sql\n(.*?)```", content_corr, re.DOTALL | re.IGNORECASE)
-        if match:
-             corrected_sql = match.group(1).strip()
-        else:
-             corrected_sql = content_corr.strip().replace("\n", " ")
+        corrected_sql = extract_sql(content_corr, fallback=bad_sql)
+        self_feedback = content_corr[:1200]
     except Exception as exc:
         logger.error("[corrector_node] Critic correction phase error: %s", exc)
-        
+
     return {
         "generated_sql": corrected_sql,
-        "guideline": current_guideline + "\n" + analytical_feedback,
+        "guideline": (current_guideline + "\n" + analytical_feedback + "\n" + self_feedback)[-5000:],
         "iteration_count": iteration_count + 1
     }

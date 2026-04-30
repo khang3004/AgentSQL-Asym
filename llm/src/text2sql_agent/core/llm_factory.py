@@ -10,11 +10,14 @@ import httpx
 import logging
 from typing import Protocol, Any, Callable
 
+from dotenv import load_dotenv
 from google import genai
 from google.genai.errors import APIError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 class LLMInterface(Protocol):
     """Protocol defining the standard interface for all LLM wrappers."""

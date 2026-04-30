@@ -1,6 +1,6 @@
 """Module to define the structure of the Agent's state in LangGraph."""
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 """ Agentic Text-to-SQL workflow orchestrator built on LangGraph.
@@ -60,6 +60,8 @@ class AgentState(TypedDict):
     schema_context: str
     generated_sql: str
     ground_truth_sql: str
+    evidence: NotRequired[str]
+    difficulty: NotRequired[str]
     execution_feedback: str
     guideline: str
     iteration_count: int
