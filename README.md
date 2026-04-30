@@ -1,52 +1,104 @@
-# AgentSQL: An Asymmetric Multi-Agent Framework for Cost-Efficient Text-to-SQL
+# 🤖 AgentSQL: Asymmetric Multi-Agent Text-to-SQL
 
-![AgentSQL Framework](https://img.shields.io/badge/AgentSQL-Multi--Agent-blue)
-![BIRD Benchmark](https://img.shields.io/badge/BIRD-Benchmark-red)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/release/python-3110/)
+[![Framework: LangGraph](https://img.shields.io/badge/Framework-LangGraph-orange.svg)](https://github.com/langchain-ai/langgraph)
+[![Benchmark: BIRD-SQL](https://img.shields.io/badge/Benchmark-BIRD--SQL-red.svg)](https://bird-bench.github.io/)
 
-## Abstract & Motivation
-Current Text-to-SQL models face a severe dilemma: utilizing frontier LLMs (e.g., GPT-5.5 \& Claude Opus 4.7) for all generations is highly cost-prohibitive, while relying purely on smaller open-source models (e.g., LLaMA-4 Scout) leads to poor execution accuracy on complex schemas like those in the BIRD benchmark.
+**AgentSQL** is a production-grade, asymmetric multi-agent framework designed to solve the Text-to-SQL dilemma: **Balancing high Execution Accuracy (EX) with cost-efficiency.**
 
-**AgentSQL** solves this by introducing an **Asymmetric Multi-Agent Architecture** coupled with an ephemeral SQLAlchemy sandbox. By decoupling the generation task from the reasoning (critic) task, we achieve SOTA cost-efficiency:
-- **Fast Generation:** Handled by low-cost, high-speed open-source models (Groq/LLaMA).
-- **Robust Reasoning:** Reserved for high-capability models (Google/Gemini 2.5) that act as critics, correcting syntax and semantic errors only when the sandbox throws an exception or a logic mismatch.
+By decoupling the high-volume **Generation** task from the complex **Correction/Reasoning** task, AgentSQL achieves state-of-the-art results on the BIRD benchmark while maintaining a significantly lower inference cost compared to monolithic frontier model approaches.
 
-## Architecture: Separation of Concerns
+---
 
-Our implementation relies on a highly modular LangGraph workflow within the `text2sql_agent/` package:
+## 🏗️ Architecture: Asymmetric Reasoning
 
-1. **Schema Explorer (`nodes/explorer.py`)**: Simulates a Model Context Protocol (MCP) to extract DDL schema metadata and statistical row samples securely.
-2. **SQL Generator (`nodes/generator.py`)**: A lightweight node powered by the Factory pattern (`core/llm_factory.py`) to inject fast open-source models.
-3. **Execution Sandbox (`tools/sandbox.py`)**: An `EphemeralSandbox` powered by **SQLAlchemy** that natively supports universal database connection URIs. It compares predicted logic directly against Ground Truth using un-ordered set execution mapping, preventing brute-force syntax hacks.
-4. **Feedback Corrector (`nodes/corrector.py`)**: Activated conditionally only when the Evaluator spots a mismatch. Uses Frontier models to write step-by-step diagnostic guidelines before issuing a corrected SQL payload.
+AgentSQL utilizes an **Asymmetric Multi-Agent Architecture** powered by **LangGraph**. The workflow isolates concerns into distinct nodes, allowing for specialized model selection at each step.
 
-## Evaluation Metrics
+```mermaid
+graph TD
+    A[User Question] --> B[Schema Explorer]
+    B --> C[SQL Generator]
+    C --> D{Execution Sandbox}
+    D -- Success --> E[Final Result]
+    D -- Syntax/Logic Error --> F[Resilient Critic]
+    F --> G[Diagnostic Feedback]
+    G --> C
+    
+    subgraph "Asymmetric Model Strategy"
+    C -- "Llama-4 Scout (Fast/Cheap)"
+    F -- "Gemini-2.5 Flash (Capable)"
+    end
+```
 
-We strictly optimize for the two primary metrics of the **BIRD-SQL Benchmark**:
-- **EX (Execution Accuracy)**: Ensuring the semantic validity of the sandbox execution output.
-- **VES (Valid Efficiency Score)**: AgentSQL minimizes inference latency through the asymmetric split, dramatically improving the total efficiency score.
+### Core Components
+1.  **Schema Explorer (`nodes/explorer.py`)**: A "Model Context Protocol" (MCP) simulator that extracts precise DDL schema metadata and statistical row samples to build a high-fidelity context.
+2.  **SQL Generator (`nodes/generator.py`)**: Optimized for high-throughput generation using lightweight open-source models via Groq.
+3.  **Execution Sandbox (`tools/sandbox.py`)**: An isolated **SQLAlchemy** environment that executes predicted SQL against a private database to verify validity before final delivery.
+4.  **Resilient Critic (`nodes/corrector.py`)**: Activated only on failure. It performs deep semantic reasoning to identify the root cause of the error and provides a "Correction Guideline" for the generator.
 
-## Setup Instructions
+---
 
-### 1. Configure the Environment
-Copy the example environment file and populate it with your LLM API keys:
+## ✨ Key Features
+
+- **🛡️ Ephemeral Sandboxing**: Native support for SQLite, MySQL, and PostgreSQL with automatic state reset and set-based result comparison.
+- **🔄 Round-Robin Key Rotation**: The `KeyRotator` abstraction supports multiple API keys per provider to prevent rate-limiting during large-scale evaluations.
+- **🔌 Resilient LLM Factory**: Automatic fallback to local **Ollama** instances if all cloud API keys are exhausted or unavailable.
+- **📊 Unified Research Suite**: A centralized evaluation engine that calculates EX, VES, and Soft F1 metrics in a single pass.
+
+---
+
+## 📈 Evaluation Metrics
+
+We support the full evaluation suite required for the BIRD-SQL benchmark:
+
+| Metric | Definition | Importance |
+| :--- | :--- | :--- |
+| **EX** | **Execution Accuracy** | Measures if the predicted SQL returns the exact same data as the ground truth. |
+| **VES** | **Valid Efficiency Score** | Measures the runtime efficiency of the SQL (Speed vs. Ground Truth). |
+| **Soft F1** | **Semantic F1 Score** | Measures partial correctness by comparing row-level data matches (Precision/Recall). |
+
+---
+
+## 🚀 Quick Start
+
+### 1. Environment Setup
+Populate your `.env` file with multiple keys for high-concurrency evaluation:
 ```bash
 cp .env.example .env
+# Fill GEMINI_API_KEY_1, GEMINI_API_KEY_2, GROQ_API_KEY_1, etc.
 ```
-Ensure you provide:
-- `GROQ_API_KEY`
-- `GEMINI_API_KEY`
 
-### 2. Install Dependencies via Docker
-We recommend using NanoClaw-style isolated environments. A Makefile is provided:
+### 2. Launch with Docker
+The framework is fully containerized for reproducibility:
 ```bash
-make sync-deps
+make build
+make up
+make shell
 ```
 
-### 3. Run the Framework Pipeline
-You can test the LangGraph workflow directly via the orchestrator evaluation command:
+### 3. Run Evaluation
+Execute the AgentSQL pipeline on the Mini-Dev dataset:
 ```bash
-make test-magic NUM_SAMPLES=10
+make eval-agentsql NUM_SAMPLES=20
 ```
 
-## Authors
-Implemented by the underdogs team, scaling Agentic AI workflows to production.
+---
+
+## 📁 Project Structure
+
+```text
+.
+├── research/               # Unified evaluation suite & SOTA comparison
+├── llm/src/text2sql_agent/ # Core Framework (LangGraph Nodes, Tools, State)
+├── evaluation/             # Legacy baseline evaluation scripts
+├── data_minidev/           # BIRD-SQL dataset and SQLite databases
+├── Makefile                # High-level orchestration commands
+└── docker-compose.yml      # Isolated execution environment
+```
+
+---
+
+## 👥 Authors
+Implemented with ❤️ by the **HCMUS Underdogs** team.
+Dedicated to scaling agentic AI workflows with rigor and resilience.

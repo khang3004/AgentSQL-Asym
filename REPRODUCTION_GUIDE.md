@@ -1,72 +1,105 @@
-1. BIRD Mini-Dev Reproduction Guide (Groq Edition)
+# 🧪 AgentSQL: Reproduction & Benchmarking Guide
 
-This guide walks you through the steps to successfully reproduce the BIRD Mini-Dev environment and text-to-SQL experiment using **Groq API and Llama 4 Scout**.
-
-We have standardized the repository using `uv` and Docker to ensure maximum ease for your teammates to reproduce the results matching senior AI Engineering practices. We've also hardcoded mapping hooks securely to target the `./data_minidev/` folder.
-
-## Prerequisites
-
-- Docker & Docker Compose OR python `3.11` + `uv`.
-- A Groq API Key (`GROQ_API_KEY`).
+This guide provides step-by-step instructions for reproducing the **AgentSQL** benchmarks on the BIRD Mini-Dev dataset. We utilize `uv` and Docker to ensure a "one-command" reproduction experience.
 
 ---
 
-## 🚀 Step 1: Configuration
+## 🛠️ Step 1: Environment Configuration
 
-Generate the environment variables file:
+AgentSQL is designed for large-scale evaluation. To avoid rate limits, we recommend providing multiple API keys.
 
-```bash
-cp .env.example .env
-```
+1.  **Initialize Environment**:
+    ```bash
+    cp .env.example .env
+    ```
 
-Open `.env` and fill out your key:
+2.  **Configure API Keys**:
+    Open `.env` and fill in your keys. The `KeyRotator` will automatically round-robin through any keys matching the pattern `PROVIDER_API_KEY_N`.
+    ```ini
+    # Example .env configuration
+    GEMINI_API_KEY_1=your_key_1
+    GEMINI_API_KEY_2=your_key_2
+    GROQ_API_KEY_1=your_key_1
+    ```
 
-```ini
-GROQ_API_KEY=gsk_your_groq_api_key_here...
-```
+3.  **Set Model Roles**:
+    Configure which models act as the Generator and the Critic:
+    ```ini
+    GENERATOR_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+    CRITIC_MODEL=gemini-2.5-flash
+    ```
 
 ---
 
-## 🚀 Step 2: Running the Stack
+## 📦 Step 2: Environment Setup
 
-The safest and most reproducible way to execute our pipeline is via the completely containerized worker. Use our `Makefile` to instantly load up Docker.
+We provide two paths for setup. **Docker is strongly recommended** for absolute consistency.
 
+### Option A: Docker (Recommended)
 ```bash
 make build
 make up
-make shell
+make shell # This drops you into a pre-configured Python 3.11 shell
 ```
 
-> **Note:** Executing `make shell` will SSH you directly inside the `llm-eval` container where everything is 100% prepared (`uv`, dependencies, and Python 3.11).
-
-*(If you are vehemently opposed to Docker, you can run `make setup` locally on your host).*
+### Option B: Local (Host Machine)
+Ensure you have Python 3.11+ and `uv` installed.
+```bash
+make setup
+source .venv/bin/activate
+```
 
 ---
 
-## 🚀 Step 3: Run Inference (Text-to-SQL via Groq/Llama-4)
+## 🚀 Step 3: Running Benchmarks
 
-Once inside the shell, navigate to the `llm` directory and launch the Groq generation script:
+Once your environment is ready, you can execute the evaluation pipeline.
 
+### 1. Smoke Test
+Verify that the LangGraph workflow and model connections are functional:
 ```bash
-cd llm/
-sh run/run_groq.sh
+make test-agentsql
 ```
 
-- **What does this do?** It will read the local databases from `../data_minidev/MINIDEV/dev_databases/` and JSON evaluation data, format valid prompts, send them parallelized (in hundreds of tokens per second) to Groq, and save the predicted SQL statements to `llm/exp_result/groq_output_kg/`!
+### 2. Full Evaluation
+Run the asymmetric pipeline on the Mini-Dev dataset. This will calculate **EX**, **VES**, and **Soft F1** automatically.
+```bash
+# Evaluate on the first 50 samples
+make eval-agentsql NUM_SAMPLES=50
+```
+
+### 3. SOTA Comparison
+After running the evaluation, compare your results against the baseline monolithic scores:
+```bash
+make compare-sota
+```
 
 ---
 
-## 🚀 Step 4: Run Evaluation (Scoring)
+## 📊 Understanding the Metrics
 
-To score Llama-4's predictions against the golden queries (ground truth) and measure Execution Accuracy (EX), navigate to the `evaluation` folder:
+The evaluation results are saved to `results/agentsql_evaluation.json`. The summary output will include:
 
+- **Execution Accuracy (EX)**: Percentage of queries where the output data matches exactly.
+- **Valid Execution Score (VES)**: Efficiency reward based on the execution time ratio vs. ground truth SQL.
+- **Soft F1**: A semantic metric that rewards partial matches in query results (calculated via row-level precision/recall).
+
+---
+
+## 🛡️ Resilience & Failbacks
+
+AgentSQL implements a **Tiered Resilience Strategy**:
+1.  **Tier 1**: Round-Robin rotation of provided cloud API keys.
+2.  **Tier 2**: Automatic 5-minute cooldown for providers hitting persistent 429/503 errors.
+3.  **Tier 3**: Automatic fallback to a local **Ollama** instance (if running) to ensure the evaluation pipeline never crashes.
+
+---
+
+## 🧹 Cleanup
+
+To remove the virtual environment and clear temporary caches:
 ```bash
-cd ../evaluation/
-sh run_evaluation.sh
+make clean
 ```
 
-- **Understanding Results**: The script evaluates EX out-of-the-box by computing data table matching similarities against the SQLite DB engine. Logs are populated in `eval_result/`.
-
-*If you additionally want to calculate R-VES (Reward-based Valid Efficiency Score) or Soft F1, simply uncomment the Python execution lines at the bottom of `./evaluation/run_evaluation.sh`.*
-
-**You are now fully finished reproducing the project end-to-end!**
+**Happy Researching!** 🚀
