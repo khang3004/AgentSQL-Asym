@@ -15,21 +15,12 @@ By decoupling the high-volume **Generation** task from the complex **Correction/
 
 AgentSQL utilizes an **Asymmetric Multi-Agent Architecture** powered by **LangGraph**. The workflow isolates concerns into distinct nodes, allowing for specialized model selection at each step.
 
-```mermaid
-graph TD
-    A[User Question] --> B[Schema Explorer]
-    B --> C[SQL Generator]
-    C --> D{Execution Sandbox}
-    D -- Success --> E[Final Result]
-    D -- Syntax/Logic Error --> F[Resilient Critic]
-    F --> G[Diagnostic Feedback]
-    G --> C
-    
-    subgraph "Asymmetric Model Strategy"
-    C -- "Llama-4 Scout (Fast/Cheap)"
-    F -- "Gemini-2.5 Flash (Capable)"
-    end
-```
+![AgentSQL Architecture Workflow](latex_playground/tikz_artifacts/agentsql_workflow.png)
+
+
+> [!TIP]
+> **High-Quality Diagram**: A professional LaTeX TikZ version of this workflow is available in [agentsql_workflow.tex](file:///Users/KhangDS/Programing/HCMUS_Code/Scientific_Research_methods_code/forked_mini_dev_hcmus_underdogs/latex_playground/tikz_artifacts/agentsql_workflow.tex), suitable for academic publications and high-resolution reports.
+
 
 ### Core Components
 1.  **Schema Explorer (`nodes/explorer.py`)**: A "Model Context Protocol" (MCP) simulator that extracts precise DDL schema metadata and statistical row samples to build a high-fidelity context.

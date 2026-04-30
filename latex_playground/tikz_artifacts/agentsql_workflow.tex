@@ -1,0 +1,70 @@
+\documentclass[tikz, border=10pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, shadows, backgrounds, fit}
+
+% Colors
+\definecolor{gen_color}{RGB}{232, 245, 233} % Light Green
+\definecolor{gen_border}{RGB}{76, 175, 80}
+\definecolor{critic_color}{RGB}{255, 248, 225} % Light Amber
+\definecolor{critic_border}{RGB}{255, 193, 7}
+\definecolor{sandbox_color}{RGB}{236, 239, 241} % Light Gray
+\definecolor{sandbox_border}{RGB}{96, 125, 139}
+\definecolor{io_color}{RGB}{227, 242, 253} % Light Blue
+\definecolor{io_border}{RGB}{33, 150, 243}
+
+\begin{document}
+\begin{tikzpicture}[
+    node distance=1.5cm and 2cm,
+    font=\sffamily\small,
+    >=Stealth,
+    process/.style={
+        rectangle, minimum width=3.5cm, minimum height=1.2cm, 
+        text centered, draw=black!70, fill=white, 
+        rounded corners=3pt, line width=0.8pt,
+        drop shadow={opacity=0.2}
+    },
+    io/.style={
+        trapezium, trapezium left angle=70, trapezium right angle=110, 
+        minimum width=3cm, minimum height=1cm, 
+        text centered, draw=io_border, fill=io_color,
+        line width=1pt, drop shadow={opacity=0.2}
+    },
+    decision/.style={
+        diamond, aspect=2, minimum width=3.5cm, minimum height=1cm, 
+        text centered, draw=sandbox_border, fill=sandbox_color, 
+        line width=1pt, drop shadow={opacity=0.2}
+    },
+    arrow/.style={thick, ->, line width=1pt, draw=black!60},
+    feedback/.style={arrow, dashed, draw=red!60}
+]
+
+    % Nodes
+    \node (input) [io] {User Question};
+    \node (explorer) [process, below=of input] {Schema Explorer \\ \scriptsize (MCP Protocol)};
+    \node (generator) [process, fill=gen_color, draw=gen_border, below=of explorer] {\textbf{SQL Generator} \\ \scriptsize Llama-4 Scout};
+    \node (sandbox) [decision, below=of generator] {Execution \\ Sandbox};
+    \node (output) [io, right=3cm of sandbox] {Final Result};
+    \node (critic) [process, fill=critic_color, draw=critic_border, left=3cm of sandbox] {\textbf{Resilient Critic} \\ \scriptsize Gemini-2.5 Flash};
+    \node (feedback_node) [process, above=of critic] {Diagnostic Feedback};
+
+    % Links
+    \draw [arrow] (input) -- (explorer);
+    \draw [arrow] (explorer) -- (generator);
+    \draw [arrow] (generator) -- (sandbox);
+    
+    \draw [arrow] (sandbox) -- node[above] {Success} (output);
+    
+    \draw [arrow] (sandbox) -- node[above] {Error} (critic);
+    \draw [arrow] (critic) -- (feedback_node);
+    \draw [arrow] (feedback_node) |- (generator);
+
+    % Legend / Subgraph indicator
+    \begin{scope}[on background layer]
+        \node[draw=black!30, dashed, line width=1pt, fill=black!2, inner sep=15pt, 
+              rounded corners=10pt, fit=(generator) (critic) (feedback_node)] (asym_box) {};
+        \node[anchor=north west, font=\sffamily\bfseries\footnotesize, text=black!60] 
+              at (asym_box.north west) {ASYMMETRIC MULTI-AGENT STRATEGY};
+    \end{scope}
+
+\end{tikzpicture}
+\end{document}
