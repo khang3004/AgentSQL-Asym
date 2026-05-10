@@ -21,6 +21,7 @@ dependencies = [
     "google-generativeai",
     "SQLAlchemy>=2.0.0",
     "sentence-transformers>=3.0.0",
+    "faiss-cpu>=1.7.4",
 ]
 
 [build-system]

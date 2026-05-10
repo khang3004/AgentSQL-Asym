@@ -37,3 +37,6 @@ eval_result/
 exp_result/
 llm/exp_result/
 *.log
+
+#Aent Skills & Workflow
+.agents/

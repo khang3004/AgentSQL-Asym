@@ -61,12 +61,38 @@ eval-agentsql: sync-deps
 	@echo "Critic: $(CRITIC_PROVIDER)/$(CRITIC_MODEL)"
 	docker compose exec -e PYTHONPATH=llm/src -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 research/evaluator.py --num_samples $(NUM_SAMPLES)"
 
+eval-master: sync-deps
+	@echo "Evaluating MasterPipeline on Mini-Dev Dataset..."
+	@echo "Generator: $(GENERATOR_PROVIDER)/$(GENERATOR_MODEL)"
+	@echo "Critic: $(CRITIC_PROVIDER)/$(CRITIC_MODEL)"
+	docker compose exec -e PYTHONPATH=llm/src -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 research/evaluator_master.py --num_samples $(NUM_SAMPLES) --top_k 3"
+
 compare-sota:
 	@echo "Comparing AgentSQL results against SoTA baselines (Mode A, Mode B)..."
 	@echo "NOTE: Ensure that results/agentsql_evaluation.json has been generated via 'make eval-agentsql'!"
 	docker compose exec llm-eval bash -c "python3 research/compare_sota.py"
 
 # -------- NEW: CHESS + MCI-SQL + MAGIC MasterPipeline --------
+
+# ---- Offline Index Build (run once before any pipeline execution) ----
+# Usage: make build-index
+# Optionally override: make build-index TABLES_JSON=... DB_ROOT=... INDEX_DIR=...
+TABLES_JSON ?= data_minidev/MINIDEV/dev_tables.json
+DB_ROOT     ?= data_minidev/MINIDEV/dev_databases
+INDEX_DIR   ?= llm/src/text2sql_agent/index
+BGE_MODEL   ?= BAAI/bge-small-en-v1.5
+
+build-index: sync-deps
+	@echo "Building offline FAISS schema index (BGE model: $(BGE_MODEL))..."
+	docker compose exec -e PYTHONPATH=llm/src llm-eval bash -c \
+		"python3 llm/src/build_offline_index.py \
+		--tables_json $(TABLES_JSON) \
+		--db_root $(DB_ROOT) \
+		--output_dir $(INDEX_DIR) \
+		--model $(BGE_MODEL)"
+	@echo "Index saved to $(INDEX_DIR)/{schema_index.faiss, metadata.pkl}"
+
+.PHONY: build-index
 
 # Usage: make run-pipeline QUESTION="How many customers?" DB_PATH="path/to/db.sqlite"
 run-pipeline: sync-deps

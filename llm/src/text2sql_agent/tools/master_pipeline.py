@@ -72,7 +72,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from langsmith import traceable
 from text2sql_agent.core.llm_factory import get_llm
 from text2sql_agent.core.sql_utils import extract_sql
-from text2sql_agent.tools.chess_linker import ChessLinker, PruningResult
+from text2sql_agent.tools.chess_linker import (
+    ChessLinker,
+    PruningResult,
+    INDEX_FILENAME,
+    METADATA_FILENAME,
+)
 from text2sql_agent.tools.metadata_extractor import MetadataExtractor
 from text2sql_agent.tools.semantic_error_checker import (
     SemanticErrorChecker,
@@ -143,14 +148,22 @@ class MasterPipelineResult:
 class MasterPipeline:
     """Orchestrates the four-phase CHESS + MCI-SQL + MAGIC pipeline.
 
-    Instantiate once and call ``run()`` for each question.  The
-    ``SentenceTransformer`` embedding model is loaded lazily on the first
-    call and cached for the lifetime of the instance, avoiding repeated
+    Instantiate once and call ``run()`` for each question.  The FAISS index
+    and the ``BAAI/bge-small-en-v1.5`` query encoder are loaded lazily on the
+    first call and cached for the lifetime of the instance, avoiding repeated
     warm-up overhead in batch evaluation loops.
+
+    .. note::
+        The offline FAISS index must be built before running any pipeline
+        queries.  Run ``make build-index`` (Docker) or
+        ``python llm/src/build_offline_index.py`` (local) once.
 
     Attributes:
         top_k (int): Number of tables to retain after CHESS pruning.
-        embedding_model (str): HuggingFace model ID for ``ChessLinker``.
+        embedding_model (str): HuggingFace model ID used for **query**
+            embedding at inference time.  Must match the model used when
+            building the offline index.
+        index_dir (str): Directory containing the pre-built FAISS artifacts.
         generator_provider (str): LLM provider for the generator role
             (``"groq"`` by default).
         generator_model (str): Model name for the generator LLM.
@@ -158,13 +171,14 @@ class MasterPipeline:
             (``"google"`` by default).
         critic_model (str): Model name for the critic LLM.
         sql_dialect (str): SQL dialect label injected into prompts.
-        _linker (ChessLinker): Cached CHESS linker instance.
+        _linker (ChessLinker): Cached FAISS-backed CHESS linker instance.
     """
 
     def __init__(
         self,
         top_k: int = 3,
-        embedding_model: str = "all-MiniLM-L6-v2",
+        embedding_model: str = "BAAI/bge-small-en-v1.5",
+        index_dir: str = "llm/src/text2sql_agent/index",
         generator_provider: str = "groq",
         generator_model: str = "meta-llama/llama-4-scout-17b-16e-instruct",
         critic_provider: str = "google",
@@ -176,8 +190,15 @@ class MasterPipeline:
         Args:
             top_k (int): Maximum tables to retain after CHESS pruning.
                 Defaults to ``3``.
-            embedding_model (str): Sentence-transformers model name.
-                Defaults to ``"all-MiniLM-L6-v2"``.
+            embedding_model (str): Sentence-transformers model used for
+                **query** embedding at inference time.  Defaults to
+                ``"BAAI/bge-small-en-v1.5"``.  Must match the model used
+                when running ``build_offline_index.py``.
+            index_dir (str): Directory containing the pre-built FAISS index
+                (``schema_index.faiss``) and metadata (``metadata.pkl``).
+                Build these with ``make build-index`` or
+                ``python llm/src/build_offline_index.py``.
+                Defaults to ``"llm/src/text2sql_agent/index"``.
             generator_provider (str): Provider for the generator LLM.
                 Defaults to ``"groq"``.
             generator_model (str): Generator model identifier.
@@ -191,20 +212,26 @@ class MasterPipeline:
         """
         self.top_k: int = top_k
         self.embedding_model: str = embedding_model
+        self.index_dir: str = index_dir
         self.generator_provider: str = generator_provider
         self.generator_model: str = generator_model
         self.critic_provider: str = critic_provider
         self.critic_model: str = critic_model
         self.sql_dialect: str = sql_dialect
 
-        # Linker is cached: SentenceTransformer loads once per instance.
-        self._linker: ChessLinker = ChessLinker(model_name=embedding_model)
+        # ChessLinker loads FAISS index + query model lazily on first prune().
+        self._linker: ChessLinker = ChessLinker(
+            index_path=os.path.join(index_dir, INDEX_FILENAME),
+            metadata_path=os.path.join(index_dir, METADATA_FILENAME),
+            model_name=embedding_model,
+        )
 
         logger.info(
             "[MasterPipeline] Initialised — top_k=%d, embed=%s, "
-            "gen=%s/%s, critic=%s/%s",
+            "index_dir=%s, gen=%s/%s, critic=%s/%s",
             top_k,
             embedding_model,
+            index_dir,
             generator_provider,
             generator_model,
             critic_provider,
