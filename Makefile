@@ -23,6 +23,14 @@ setup: .env
 	@echo "\nEnvironment setup complete. Run 'source .venv/bin/activate' to use it."	
 
 # -------- DOCKER --------
+# Environment overrides for Docker exec to allow dynamic 'make' overrides
+DOCKER_ENV = -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) \
+             -e GENERATOR_MODEL=$(GENERATOR_MODEL) \
+             -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) \
+             -e CRITIC_MODEL=$(CRITIC_MODEL)
+
+DOCKER_EXEC = docker compose exec $(DOCKER_ENV) llm-eval
+
 build:
 	@echo "Building Docker images..."
 	docker compose build
@@ -39,33 +47,36 @@ down:
 .PHONY: pull-data
 pull-data:
 	@echo "Pulling dataset using gdown..."
-	docker compose exec llm-eval bash -c "sh scripts/pull_data.sh"
+	$(DOCKER_EXEC) bash -c "sh scripts/pull_data.sh"
 
 shell:
 	@echo "Opening bash shell in the llm-eval container..."
-	docker compose exec llm-eval bash
+	$(DOCKER_EXEC) bash
 
 sync-deps:
 	@echo "Syncing new dependencies inside the container..."
-	docker compose exec llm-eval bash -c "uv pip install -r pyproject.toml --system"
+	$(DOCKER_EXEC) bash -c "uv pip install -r pyproject.toml --system"
 
 # -------- NEW: AgentSQL MULTI-AGENT PIPELINE --------
 
 test-agentsql: sync-deps
 	@echo "Testing AgentSQL (Smoke Test) to ensure graph logic is functional..."
-	docker compose exec -e PYTHONPATH=llm/src -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 llm/src/smoke_test_agent.py"
+	$(DOCKER_EXEC) bash -c "python3 llm/src/smoke_test_agent.py"
 
 eval-agentsql: sync-deps
 	@echo "Evaluating AgentSQL flow on Mini-Dev Dataset..."
 	@echo "Generator: $(GENERATOR_PROVIDER)/$(GENERATOR_MODEL)"
 	@echo "Critic: $(CRITIC_PROVIDER)/$(CRITIC_MODEL)"
-	docker compose exec -e PYTHONPATH=llm/src -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 research/evaluator.py --num_samples $(NUM_SAMPLES)"
+	$(DOCKER_EXEC) bash -c "python3 research/evaluator.py --num_samples $(NUM_SAMPLES)"
 
 eval-master: sync-deps
 	@echo "Evaluating MasterPipeline on Mini-Dev Dataset..."
 	@echo "Generator: $(GENERATOR_PROVIDER)/$(GENERATOR_MODEL)"
 	@echo "Critic: $(CRITIC_PROVIDER)/$(CRITIC_MODEL)"
-	docker compose exec -e PYTHONPATH=llm/src -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 research/evaluator_master.py --num_samples $(NUM_SAMPLES) --top_k 3"
+	$(DOCKER_EXEC) python3 research/evaluator_master.py \
+		--num_samples $(NUM_SAMPLES) \
+		--top_k 3 \
+		$(if $(filter true,$(FORCE_RESTART)),--force-restart)
 
 compare-sota:
 	@echo "Comparing AgentSQL results against SoTA baselines (Mode A, Mode B)..."
@@ -84,12 +95,11 @@ BGE_MODEL   ?= BAAI/bge-small-en-v1.5
 
 build-index: sync-deps
 	@echo "Building offline FAISS schema index (BGE model: $(BGE_MODEL))..."
-	docker compose exec -e PYTHONPATH=llm/src llm-eval bash -c \
-		"python3 llm/src/build_offline_index.py \
+	$(DOCKER_EXEC) python3 llm/src/build_offline_index.py \
 		--tables_json $(TABLES_JSON) \
 		--db_root $(DB_ROOT) \
 		--output_dir $(INDEX_DIR) \
-		--model $(BGE_MODEL)"
+		--model $(BGE_MODEL)
 	@echo "Index saved to $(INDEX_DIR)/{schema_index.faiss, metadata.pkl}"
 
 .PHONY: build-index
@@ -97,23 +107,28 @@ build-index: sync-deps
 # Usage: make run-pipeline QUESTION="How many customers?" DB_PATH="path/to/db.sqlite"
 run-pipeline: sync-deps
 	@echo "Running MasterPipeline (CHESS + MCI + MAGIC)..."
-	docker compose exec -e PYTHONPATH=llm/src -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 llm/src/text2sql_agent/tools/master_pipeline.py --question \"$(QUESTION)\" --db_path \"$(DB_PATH)\" --top_k 3"
+	$(DOCKER_EXEC) python3 llm/src/text2sql_agent/tools/master_pipeline.py \
+		--question "$(QUESTION)" \
+		--db_path "$(DB_PATH)" \
+		--top_k 3
 
-# Usage: make test-chess QUESTION="How many customers?" DB_PATH="path/to/db.sqlite"
 test-chess:
 	@echo "Testing CHESS Semantic Pruning (Local)..."
-	docker compose exec -e PYTHONPATH=llm/src llm-eval bash -c "python3 llm/src/text2sql_agent/tools/chess_linker.py --question \"$(QUESTION)\" --db_path \"$(DB_PATH)\" --top_k 3"
+	$(DOCKER_EXEC) python3 llm/src/text2sql_agent/tools/chess_linker.py \
+		--question "$(QUESTION)" \
+		--db_path "$(DB_PATH)" \
+		--top_k 3
 
-# Usage: make test-mci DB_PATH="path/to/db.sqlite"
 test-mci:
 	@echo "Testing MCI Metadata Extraction (Local)..."
-	docker compose exec -e PYTHONPATH=llm/src llm-eval bash -c "python3 llm/src/text2sql_agent/tools/metadata_extractor.py --db_path \"$(DB_PATH)\""
+	$(DOCKER_EXEC) python3 llm/src/text2sql_agent/tools/metadata_extractor.py \
+		--db_path "$(DB_PATH)"
 
-# Usage: make test-semantic DB_PATH="path/to/db.sqlite" SQL="SELECT * FROM users"
-SQL ?= SELECT * FROM customers LIMIT 5
 test-semantic:
 	@echo "Testing Semantic Error Checker (Local)..."
-	docker compose exec -e PYTHONPATH=llm/src llm-eval bash -c "python3 llm/src/text2sql_agent/tools/semantic_error_checker.py --db_path \"$(DB_PATH)\" --sql \"$(SQL)\""
+	$(DOCKER_EXEC) python3 llm/src/text2sql_agent/tools/semantic_error_checker.py \
+		--db_path "$(DB_PATH)" \
+		--sql "$(SQL)"
 
 # -------- ORIGINAL: MONOLITHIC EVALUATION --------
 eval-monolithic: sync-deps
