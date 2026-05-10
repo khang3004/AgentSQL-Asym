@@ -6,6 +6,8 @@ export
 
 # Default parameters if not set in .env
 NUM_SAMPLES ?= 10
+QUESTION ?= What is the ratio of customers who pay in EUR against customers who pay in CZK?
+DB_PATH ?= data_minidev/MINIDEV/dev_databases/debit_card_specializing/debit_card_specializing.sqlite
 
 # Generate .env file from .env.example if it doesn't exist
 .env:
@@ -51,18 +53,41 @@ sync-deps:
 
 test-agentsql: sync-deps
 	@echo "Testing AgentSQL (Smoke Test) to ensure graph logic is functional..."
-	docker compose exec -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 llm/src/smoke_test_agent.py"
+	docker compose exec -e PYTHONPATH=llm/src -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 llm/src/smoke_test_agent.py"
 
 eval-agentsql: sync-deps
 	@echo "Evaluating AgentSQL flow on Mini-Dev Dataset..."
 	@echo "Generator: $(GENERATOR_PROVIDER)/$(GENERATOR_MODEL)"
 	@echo "Critic: $(CRITIC_PROVIDER)/$(CRITIC_MODEL)"
-	docker compose exec -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 research/evaluator.py --num_samples $(NUM_SAMPLES)"
+	docker compose exec -e PYTHONPATH=llm/src -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 research/evaluator.py --num_samples $(NUM_SAMPLES)"
 
 compare-sota:
 	@echo "Comparing AgentSQL results against SoTA baselines (Mode A, Mode B)..."
 	@echo "NOTE: Ensure that results/agentsql_evaluation.json has been generated via 'make eval-agentsql'!"
 	docker compose exec llm-eval bash -c "python3 research/compare_sota.py"
+
+# -------- NEW: CHESS + MCI-SQL + MAGIC MasterPipeline --------
+
+# Usage: make run-pipeline QUESTION="How many customers?" DB_PATH="path/to/db.sqlite"
+run-pipeline: sync-deps
+	@echo "Running MasterPipeline (CHESS + MCI + MAGIC)..."
+	docker compose exec -e PYTHONPATH=llm/src -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) -e GENERATOR_MODEL=$(GENERATOR_MODEL) -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) -e CRITIC_MODEL=$(CRITIC_MODEL) llm-eval bash -c "python3 llm/src/text2sql_agent/tools/master_pipeline.py --question \"$(QUESTION)\" --db_path \"$(DB_PATH)\" --top_k 3"
+
+# Usage: make test-chess QUESTION="How many customers?" DB_PATH="path/to/db.sqlite"
+test-chess:
+	@echo "Testing CHESS Semantic Pruning (Local)..."
+	docker compose exec -e PYTHONPATH=llm/src llm-eval bash -c "python3 llm/src/text2sql_agent/tools/chess_linker.py --question \"$(QUESTION)\" --db_path \"$(DB_PATH)\" --top_k 3"
+
+# Usage: make test-mci DB_PATH="path/to/db.sqlite"
+test-mci:
+	@echo "Testing MCI Metadata Extraction (Local)..."
+	docker compose exec -e PYTHONPATH=llm/src llm-eval bash -c "python3 llm/src/text2sql_agent/tools/metadata_extractor.py --db_path \"$(DB_PATH)\""
+
+# Usage: make test-semantic DB_PATH="path/to/db.sqlite" SQL="SELECT * FROM users"
+SQL ?= SELECT * FROM customers LIMIT 5
+test-semantic:
+	@echo "Testing Semantic Error Checker (Local)..."
+	docker compose exec -e PYTHONPATH=llm/src llm-eval bash -c "python3 llm/src/text2sql_agent/tools/semantic_error_checker.py --db_path \"$(DB_PATH)\" --sql \"$(SQL)\""
 
 # -------- ORIGINAL: MONOLITHIC EVALUATION --------
 eval-monolithic: sync-deps

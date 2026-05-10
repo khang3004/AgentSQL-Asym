@@ -13,6 +13,7 @@ from typing import Protocol, Any, Callable
 from dotenv import load_dotenv
 from google import genai
 from google.genai.errors import APIError
+from langsmith import traceable
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,7 @@ class OllamaLLM:
         self.model_name = model_name
         self.api_url = "http://host.docker.internal:11434/api/generate"
 
+    @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
         """Generates a text response using the local Ollama instance.
         
@@ -161,6 +163,7 @@ class GroqLLM:
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True
     )
+    @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
         """Generates SQL using the Groq API.
         
@@ -222,6 +225,7 @@ class GeminiLLM:
         wait=wait_exponential(multiplier=1, min=2, max=8),
         reraise=True
     )
+    @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
         """Generates correction feedback using the Gemini API.
         
@@ -276,6 +280,7 @@ class ResilientCriticLLM:
         self.primary_llm = GeminiLLM(primary_model_name)
         self.fallback_llm = GroqLLM("llama-3.3-70b-versatile")
 
+    @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
         """Generates correction feedback, falling back to Groq if Google completely fails.
         
