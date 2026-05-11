@@ -1,334 +1,316 @@
 """Module for instantiating LLM providers via a Factory pattern.
 
-This module provides a unified interface for different Language Models (LLMs)
-used in the AgentSQL pipeline. It implements an Asymmetric framework where
-the generator and critic roles have distinct error handling and fallback strategies.
+This module provides a unified interface for Language Models used in the AgentSQL
+pipeline. It implements an Asymmetric, Groq-only architecture where:
+  - Generator role: openai/gpt-oss-120b (primary) → llama-4-scout-17b (fallback)
+  - Corrector role: openai/gpt-oss-20b (primary) → llama-4-scout-17b (fallback)
+
+Key-rotation strategy: On a Groq 429, cycle to the next API key IMMEDIATELY
+(zero sleep) and retry. Only after all N keys have been tried does the caller
+escalate to the scout fallback model.
 """
 
 import os
-import httpx
 import logging
-from typing import Protocol, Any, Callable
+from typing import Protocol
 
+import httpx
 from dotenv import load_dotenv
-from google import genai
-from google.genai.errors import APIError
 from langsmith import traceable
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
 
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+# ---------------------------------------------------------------------------
+# Custom exception types
+# ---------------------------------------------------------------------------
+
+class RateLimitError(Exception):
+    """Raised when a Groq API key returns HTTP 429 Too Many Requests."""
+    pass
+
+
+class AllKeysExhaustedError(Exception):
+    """Raised when every Groq API key in the pool has hit its rate limit."""
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Protocol
+# ---------------------------------------------------------------------------
+
 class LLMInterface(Protocol):
-    """Protocol defining the standard interface for all LLM wrappers."""
-    
+    """Standard interface for all LLM wrappers in the pipeline."""
+
     def generate(self, prompt: str) -> str:
         """Generates a text response given a prompt string.
-        
+
         Args:
-            prompt (str): The input prompt for the LLM.
-            
+            prompt: The input prompt for the LLM.
+
         Returns:
-            str: The generated text response.
+            The generated text response.
         """
         ...
 
-class RateLimitError(Exception):
-    """Exception raised when an LLM provider's rate limit is exceeded."""
-    pass
 
-class ServiceUnavailableError(Exception):
-    """Exception raised when an LLM provider service is temporarily unavailable (e.g., 503)."""
-    pass
+# ---------------------------------------------------------------------------
+# Key Manager (Groq-only)
+# ---------------------------------------------------------------------------
 
-class KeyRotator:
-    """Provides API keys in a Round-Robin fashion from environment variables."""
-    
-    def __init__(self, prefix: str) -> None:
-        """Initializes the KeyRotator by scanning environment variables.
-        
-        Args:
-            prefix (str): The prefix of the environment variables to scan (e.g., 'GROQ_API_KEY').
-        """
+class KeyManager:
+    """Round-Robin API key manager that reads keys from environment variables.
+
+    Scans for ``GROQ_API_KEY_1``, ``GROQ_API_KEY_2``, … (and a bare
+    ``GROQ_API_KEY`` as a single-key fallback) and cycles through them.
+    ``rotate()`` advances to the next key; ``exhausted`` becomes True once
+    every key has been tried in the current round.
+    """
+
+    def __init__(self, prefix: str = "GROQ_API_KEY") -> None:
         self.keys: list[str] = []
         i = 1
         while True:
             key = os.environ.get(f"{prefix}_{i}")
             if not key:
-                if i == 1:
-                    fallback = os.environ.get(prefix)
-                    if fallback and not any(x in fallback.lower() for x in ["your_", "placeholder", "_here"]):
-                        self.keys.append(fallback)
                 break
             if not any(x in key.lower() for x in ["your_", "placeholder", "_here"]):
                 self.keys.append(key)
             i += 1
-            
-        if not self.keys and os.environ.get(prefix):
-             fallback_raw = os.environ.get(prefix)
-             if fallback_raw and not any(x in fallback_raw.lower() for x in ["your_", "placeholder", "_here"]):
-                  self.keys.append(fallback_raw)
-             
-        self.current_idx: int = 0
 
-    def get_key(self) -> str:
-        """Retrieves the next available API key.
-        
-        Returns:
-            str: The API key, or an empty string if no valid keys are found.
-        """
+        # Bare fallback (single-key setup)
+        if not self.keys:
+            bare = os.environ.get(prefix, "")
+            if bare and not any(x in bare.lower() for x in ["your_", "placeholder", "_here"]):
+                self.keys.append(bare)
+
+        self._idx: int = 0
+        self._tries: int = 0  # how many distinct keys used in current round
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    @property
+    def total_keys(self) -> int:
+        return len(self.keys)
+
+    @property
+    def exhausted(self) -> bool:
+        """True once every key has been tried at least once in this round."""
+        return self._tries >= self.total_keys
+
+    def current_key(self) -> str:
+        """Return the currently active API key (does NOT advance the cursor)."""
         if not self.keys:
             return ""
-        key = self.keys[self.current_idx]
-        self.current_idx = (self.current_idx + 1) % len(self.keys)
-        return key
+        return self.keys[self._idx]
 
-groq_rotator = KeyRotator("GROQ_API_KEY")
-gemini_rotator = KeyRotator("GEMINI_API_KEY")
+    def rotate(self) -> str:
+        """Advance to the next key and return it.  Marks one more key as tried."""
+        if not self.keys:
+            return ""
+        self._idx = (self._idx + 1) % self.total_keys
+        self._tries += 1
+        logger.info("[KeyManager] Rotated to key index %d.", self._idx)
+        return self.keys[self._idx]
 
-class OllamaLLM:
-    """Fallback LLM using a local Ollama instance."""
-    
-    def __init__(self, model_name: str = "llama3.1") -> None:
-        """Initializes the Ollama local LLM.
-        
-        Args:
-            model_name (str): The name of the local Ollama model to use.
-        """
-        self.model_name = model_name
-        self.api_url = "http://host.docker.internal:11434/api/generate"
+    def reset_tries(self) -> None:
+        """Call after a successful round so ``exhausted`` resets correctly."""
+        self._tries = 0
 
-    @traceable(run_type="llm")
-    def generate(self, prompt: str) -> str:
-        """Generates a text response using the local Ollama instance.
-        
-        Args:
-            prompt (str): The input prompt.
-            
-        Returns:
-            str: The generated text response, or an error string if the fallback fails.
-        """
-        logger.info("[OllamaLLM] Using local fallback for prompt.")
-        try:
-            with httpx.Client(timeout=120.0) as client:
-                response = client.post(
-                    self.api_url, 
-                    json={"model": self.model_name, "prompt": prompt, "stream": False}
-                )
-                response.raise_for_status()
-                return response.json().get("response", "")
-        except Exception as e:
-            logger.error(f"[OllamaLLM] Fallback failed: {e}")
-            return f"Error: Local fallback failed - {e}"
 
-def fallback_to_ollama(func: Callable) -> Callable:
-    """Decorator to fallback to Ollama ONLY if all keys are exhausted.
-    
+# Singleton key managers – shared across all GroqLLM instances
+groq_key_manager = KeyManager("GROQ_API_KEY")
+
+
+# ---------------------------------------------------------------------------
+# Base Groq HTTP caller
+# ---------------------------------------------------------------------------
+
+_GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+_GROQ_TIMEOUT = 60.0
+
+
+def _call_groq(model_name: str, prompt: str, api_key: str, max_tokens: int = 2048, temperature: float = 0.0) -> str:
+    """Low-level Groq REST call.  Raises ``RateLimitError`` on 429.
+
     Args:
-        func (Callable): The generation function to wrap.
-        
+        model_name: Groq model identifier.
+        prompt: User prompt string.
+        api_key: Groq API key to use.
+        max_tokens: Maximum tokens to generate.
+        temperature: Sampling temperature (0.0 = deterministic).
+
+    Raises:
+        RateLimitError: On HTTP 429.
+        httpx.HTTPStatusError: On any other HTTP error.
+
     Returns:
-        Callable: The wrapped function with fallback logic.
+        The generated text content.
     """
-    def wrapper(*args: Any, **kwargs: Any) -> str:
-        try:
-            return func(*args, **kwargs)
-        except RateLimitError as e:
-            logger.error(f"All API keys exhausted (Rate Limit): {e}. Falling back to local Ollama.")
-            prompt = kwargs.get('prompt') or args[1]
-            return OllamaLLM().generate(prompt)
-    return wrapper
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    with httpx.Client(timeout=_GROQ_TIMEOUT) as client:
+        response = client.post(_GROQ_API_URL, headers=headers, json=payload)
+
+    if response.status_code == 429:
+        logger.warning("[Groq] HTTP 429 on model=%s key_idx=%d. Rotating key.", model_name, groq_key_manager._idx)
+        raise RateLimitError(f"Groq 429 on model {model_name}")
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError:
+        logger.error("[Groq] HTTP error %d: %s", response.status_code, response.text[:400])
+        raise
+
+    return response.json()["choices"][0]["message"]["content"]
+
+
+# ---------------------------------------------------------------------------
+# GroqLLM — single model, key-rotation on 429, no sleep between retries
+# ---------------------------------------------------------------------------
 
 class GroqLLM:
-    """Wrapper for Groq API acting as the Generator.
-    
-    Implements key rotation and rate limit handling. Falls back to a local Ollama
-    instance only when all API keys have exhausted their quotas (RateLimitError).
-    """
-    
-    def __init__(self, model_name: str) -> None:
-        """Initializes the Groq LLM wrapper.
-        
-        Args:
-            model_name (str): The Groq model name to use.
-        """
-        self.model_name = model_name
-        self.api_url = "https://api.groq.com/openai/v1/chat/completions"
+    """Wrapper for a single Groq model with instant key rotation on 429.
 
-    @fallback_to_ollama
-    @retry(
-        retry=retry_if_exception_type(RateLimitError),
-        stop=stop_after_attempt(5),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        reraise=True
-    )
+    Retries up to ``len(keys)`` times with *zero* sleep between each attempt.
+    Each retry calls ``groq_key_manager.rotate()`` before the next attempt so
+    a fresh key is always used.  If all keys are exhausted the
+    ``AllKeysExhaustedError`` propagates upward.
+    """
+
+    def __init__(self, model_name: str, max_tokens: int = 2048) -> None:
+        self.model_name = model_name
+        self.max_tokens = max_tokens
+
     @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
-        """Generates SQL using the Groq API.
-        
+        """Generate text.  Rotates key immediately on 429, raises after all exhausted.
+
         Args:
-            prompt (str): The prompt containing the schema and user question.
-            
+            prompt: Input prompt.
+
         Raises:
-            Exception: If no API key is found.
-            RateLimitError: If a 429 Too Many Requests error occurs.
-            httpx.HTTPStatusError: For other HTTP errors (e.g., 400, 404).
-            
+            AllKeysExhaustedError: When every key has returned 429.
+            Exception: On non-rate-limit errors.
+
         Returns:
-            str: The generated SQL response.
+            Generated text string.
         """
-        api_key = groq_rotator.get_key()
-        if not api_key:
-            raise Exception("No GROQ_API_KEY found in .env")
-            
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.0,
-            "max_tokens": 1024
-        }
-        with httpx.Client(timeout=30.0) as client:
-            response = client.post(self.api_url, headers=headers, json=payload)
-            if response.status_code == 429:
-                logger.warning("Groq HTTP 429 hit. Rotating key and retrying.")
-                raise RateLimitError("Groq 429 Too Many Requests")
+        if not groq_key_manager.keys:
+            raise RuntimeError("No GROQ_API_KEY_* entries found in environment.")
+
+        groq_key_manager.reset_tries()
+        last_error: Exception | None = None
+
+        # Try every key in the pool exactly once per call
+        for attempt in range(groq_key_manager.total_keys):
+            api_key = groq_key_manager.current_key()
             try:
-                response.raise_for_status()
-            except httpx.HTTPStatusError as e:
-                logger.error(f"Groq API error: {response.text}")
-                raise e
-            return response.json()["choices"][0]["message"]["content"]
+                result = _call_groq(self.model_name, prompt, api_key, self.max_tokens)
+                groq_key_manager.reset_tries()
+                return result
+            except RateLimitError as e:
+                last_error = e
+                groq_key_manager.rotate()
+                logger.info("[GroqLLM] Attempt %d/%d exhausted – trying next key.", attempt + 1, groq_key_manager.total_keys)
+            except Exception:
+                raise  # Non-rate-limit errors bubble up immediately
 
-class GeminiLLM:
-    """Wrapper for Google Gemini API acting as the Critic.
-    
-    Implements robust error handling with exponential backoff for 429 (Quota)
-    and 503 (Service Unavailable) errors. Does NOT fallback to a local model.
+        raise AllKeysExhaustedError(
+            f"All {groq_key_manager.total_keys} Groq keys returned 429 for model '{self.model_name}'."
+        ) from last_error
+
+
+# ---------------------------------------------------------------------------
+# ResilientGroqLLM — primary model with scout fallback
+# ---------------------------------------------------------------------------
+
+_FALLBACK_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+
+
+class ResilientGroqLLM:
+    """Two-tier Groq wrapper: primary model → scout fallback on full key exhaustion.
+
+    When all Groq keys fail on the primary model (``AllKeysExhaustedError``),
+    falls back to ``meta-llama/llama-4-scout-17b-16e-instruct`` which is a
+    lighter, more available model on the same keys.
     """
-    
-    def __init__(self, model_name: str) -> None:
-        """Initializes the Gemini LLM wrapper.
-        
-        Args:
-            model_name (str): The Gemini model name to use.
-        """
-        self.model_name = model_name
 
-    @retry(
-        retry=retry_if_exception_type((RateLimitError, ServiceUnavailableError)),
-        stop=stop_after_attempt(10),
-        wait=wait_exponential(multiplier=1, min=2, max=8),
-        reraise=True
-    )
-    @traceable(run_type="llm")
-    def generate(self, prompt: str) -> str:
-        """Generates correction feedback using the Gemini API.
-        
-        Args:
-            prompt (str): The prompt containing the failed SQL and schema.
-            
-        Raises:
-            Exception: If no API key is found.
-            RateLimitError: If a 429 Too Many Requests error occurs.
-            ServiceUnavailableError: If a 503 Service Unavailable error occurs.
-            
-        Returns:
-            str: The generated feedback response.
-        """
-        api_key = gemini_rotator.get_key()
-        if not api_key:
-            raise Exception("No GEMINI_API_KEY found in .env")
-            
-        try:
-            client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-            )
-            return response.text or ""
-        except APIError as e:
-            error_code = getattr(e, 'code', None)
-            error_str = str(e)
-            
-            if error_code == 429 or "429" in error_str:
-                logger.warning("Gemini HTTP 429 hit. Rotating key and retrying.")
-                raise RateLimitError("Gemini 429 Too Many Requests")
-            elif error_code == 503 or "503" in error_str:
-                logger.warning("Gemini HTTP 503 Service Unavailable hit. Backing off and retrying.")
-                raise ServiceUnavailableError("Gemini 503 Service Unavailable")
-                
-            logger.error(f"Gemini API Error: {error_str}")
-            raise e
-
-class ResilientCriticLLM:
-    """Resilient wrapper for Critic role that falls back to Groq 70B on persistent Google failures.
-    
-    Implements cross-provider graceful degradation.
-    """
-    
-    def __init__(self, primary_model_name: str) -> None:
-        """Initializes the resilient critic wrapper.
-        
-        Args:
-            primary_model_name (str): The primary Gemini model name to use.
-        """
-        self.primary_llm = GeminiLLM(primary_model_name)
-        self.fallback_llm = GroqLLM("llama-3.3-70b-versatile")
+    def __init__(self, primary_model: str, max_tokens: int = 2048) -> None:
+        self.primary_llm = GroqLLM(primary_model, max_tokens)
+        self.fallback_llm = GroqLLM(_FALLBACK_MODEL, max_tokens)
+        self.primary_model = primary_model
 
     @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
-        """Generates correction feedback, falling back to Groq if Google completely fails.
-        
+        """Generate text, transparently degrading to scout on key exhaustion.
+
         Args:
-            prompt (str): The input prompt.
-            
+            prompt: Input prompt.
+
         Returns:
-            str: The generated feedback response.
+            Generated text string.
         """
         try:
             return self.primary_llm.generate(prompt)
-        except Exception as e:
+        except AllKeysExhaustedError as e:
             logger.warning(
-                f"CRITICAL: Primary Critic (Google) failed persistently with error: {e}. "
-                f"Gracefully degrading to Groq (llama-3.3-70b-versatile)."
+                "[ResilientGroqLLM] All keys exhausted for primary model '%s': %s. "
+                "Gracefully degrading to fallback model '%s'.",
+                self.primary_model,
+                e,
+                _FALLBACK_MODEL,
             )
             return self.fallback_llm.generate(prompt)
 
 
-def get_llm(role: str, provider: str = None, model_name: str = None) -> LLMInterface:
-    """Dependency Injection factory for Language Models.
-    
+# ---------------------------------------------------------------------------
+# Public factory function
+# ---------------------------------------------------------------------------
+
+def get_llm(role: str, model_name: str | None = None) -> LLMInterface:
+    """Dependency-injection factory for LLM instances.
+
     Args:
-        role (str): The role of the LLM in the pipeline ('generator' or 'critic').
-        provider (str, optional): The LLM provider. Defaults to 'groq' for generator, 'google' for critic.
-        model_name (str, optional): The model name. Defaults to provider-specific models.
-        
+        role: Pipeline role – ``'generator'`` or ``'corrector'`` (or ``'critic'``
+              as a legacy alias for corrector).
+        model_name: Override the default model for the role.
+
     Raises:
-        ValueError: If an unsupported provider is specified.
-        
+        ValueError: If an unrecognised role is passed.
+
     Returns:
-        LLMInterface: An instantiated LLM wrapper matching the requested role and provider.
+        An ``LLMInterface``-compatible wrapper.
     """
     role_lower = role.lower()
-    
-    # Use provided arguments, fallback to defaults if not provided
-    if not provider:
-        provider = "groq" if role_lower == "generator" else "google"
-    if not model_name:
-        model_name = "llama-3.1-8b-instant" if role_lower == "generator" else "gemini-2.5-flash"
 
-    logger.info("[LLMFactory] Initializing %s LLM: %s via %s", role, model_name, provider)
-    
-    if provider == "groq":
-        return GroqLLM(model_name)
-    elif provider == "google":
-        if role_lower == "critic":
-            return ResilientCriticLLM(model_name)
-        return GeminiLLM(model_name)
-    else:
-        raise ValueError(f"Unsupported LLM provider: {provider}")
+    _DEFAULTS: dict[str, tuple[str, int]] = {
+        "generator": ("openai/gpt-oss-120b", 2048),
+        "corrector": ("openai/gpt-oss-20b", 1024),
+        "critic":    ("openai/gpt-oss-20b", 1024),   # legacy alias
+        # Reflection uses the scout model: blazing fast, always available.
+        "reflector": ("meta-llama/llama-4-scout-17b-16e-instruct", 512),
+    }
+
+    if role_lower not in _DEFAULTS:
+        raise ValueError(
+            f"Unsupported LLM role: '{role}'. Valid roles: {list(_DEFAULTS.keys())}"
+        )
+
+    default_model, default_max_tokens = _DEFAULTS[role_lower]
+    resolved_model = model_name or default_model
+
+    logger.info("[LLMFactory] Initialising role='%s' model='%s' (Groq)", role, resolved_model)
+    return ResilientGroqLLM(primary_model=resolved_model, max_tokens=default_max_tokens)

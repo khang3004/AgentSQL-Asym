@@ -40,3 +40,6 @@ llm/exp_result/
 
 #Aent Skills & Workflow
 .agents/
+skills-lock.json
+llm/src/text2sql_agent/index/metadata.pkl
+llm/src/text2sql_agent/index/schema_index.faiss

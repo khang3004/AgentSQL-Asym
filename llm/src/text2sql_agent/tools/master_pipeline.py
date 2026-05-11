@@ -29,38 +29,40 @@ end-to-end Text-to-SQL pipeline:
     └───────────────────────────┬──────────────────────────────────────┘
                                 │ enriched_prompt
     ┌───────────────────────────▼──────────────────────────────────────┐
-    │  PHASE 4 — SQL GENERATION                [LLM API CALL #1 Groq]  │
+    │  PHASE 4a — SQL GENERATION          [LLM API CALL #1 Groq Gen]   │
     │  Generator: meta-llama/llama-4-scout-17b-16e-instruct            │
     │  → candidate SQL                                                 │
     └───────────────────────────┬──────────────────────────────────────┘
-                                │
+                                │ candidate_sql
     ┌───────────────────────────▼──────────────────────────────────────┐
+    │  PHASE 4ab — REFLECTION          [LLM API CALL #2 Groq Scout]    │
+    │  Reflector: meta-llama/llama-4-scout-17b-16e-instruct            │
+    │  • Back-translate SQL → English and compare with question         │
+    │  • If match → <ok>   If mismatch → <error>logical mismatch</error>│
+    └──────────────┬────────────────────────────┬───────────────────────┘
+               <ok>                        <error> logical mismatch
+                   │                             │
+    ┌──────────────▼──────────────────────────────────────┐
     │  PHASE 4b — SEMANTIC VALIDATION                 [OFFLINE / FREE] │
     │  SemanticErrorChecker.execute_safe(candidate_sql)                │
-    │  • State: SUCCESS  → return rows immediately                     │
-    │  • State: EMPTY    → EmptyResultError (suggest LIKE/LOWER)       │
-    │  • State: ALL-NULL → NullResultError  (suggest JOIN fix)         │
-    │  • State: SYNTAX   → sqlite3.OperationalError                   │
-    └──────────────┬────────────────────────┬────────────────────────── ┘
-              SUCCESS                   FAILURE + suggestion string
-              (api_calls=1)                      │
-                                ┌────────────────▼──────────────────────┐
-                                │  PHASE 4c — MAGIC CORRECTION          │
-                                │           [LLM API CALL #2 Gemini]    │
-                                │  Critic: gemini-2.5-flash             │
-                                │  • Receives: error + suggestion +      │
-                                │    MAGIC checklist + metadata          │
-                                │  • Returns corrected SQL              │
-                                │  • Re-validated locally               │
-                                └───────────────────────────────────────┘
-                                          (api_calls=2)
+    └──────────────┬───────────────────────────────────────┘
+              SUCCESS                  FAILURE + suggestion string
+                  │                             │
+                  └──── merge with reflection ────┘
+                                    │ any error (semantic OR logical)
+                         ┌──────────▼─────────────────────────────┐
+                         │  PHASE 4c — MAGIC CORRECTION             │
+                         │         [LLM API CALL #3 Groq Critic]    │
+                         │  Critic: openai/gpt-oss-20b              │
+                         │  • XML-tagged output: <sql>…</sql>         │
+                         │  • Re-validated locally (free)           │
+                         └─────────────────────────────────────────┘
+                                   (api_calls ≤ 3)
 
 Design Invariants:
-    - Maximum 2 LLM API calls per question.
-    - All context enrichment, schema pruning, and semantic validation are
-      local and free.
-    - Every phase is logged with precise data-reduction metrics so the
-      operator can trace the exact token footprint at each stage.
+    - Maximum 3 LLM API calls per question (Gen + Reflect + Correct).
+    - Reflection catches silent logical errors SQLite cannot see.
+    - All schema pruning, metadata extraction, and validation are local.
     - All public methods carry full PEP 526 type annotations.
 """
 
@@ -135,6 +137,7 @@ class MasterPipelineResult:
     rows: Optional[List[Tuple[Any, ...]]]
     generator_raw_sql: str
     semantic_error_message: Optional[str] = field(default=None)
+    reflection_error_message: Optional[str] = field(default=None)
     critic_corrected_sql: Optional[str] = field(default=None)
     api_calls_made: int = field(default=1)
     prompt_char_count: int = field(default=0)
@@ -384,7 +387,6 @@ class MasterPipeline:
         )
         llm = get_llm(
             role="generator",
-            provider=self.generator_provider,
             model_name=self.generator_model,
         )
         try:
@@ -400,6 +402,73 @@ class MasterPipeline:
                 "[MasterPipeline | Phase 4a] Generator error: %s", exc
             )
             return "SELECT 1;"
+
+    # ------------------------------------------------------------------
+    # Phase 4ab: Reflection (logical self-consistency check)
+    # ------------------------------------------------------------------
+
+    @traceable(run_type="tool")
+    def _phase4ab_reflect(self, question: str, candidate_sql: str) -> Optional[str]:
+        """Back-translate candidate SQL and check logical consistency — API call #2.
+
+        Uses ``meta-llama/llama-4-scout-17b-16e-instruct`` (blazing fast, 512
+        tokens max) to translate the SQL back to English and compare it with
+        the original question.  If they do not match, returns a logical error
+        description so the corrector can be triggered without an SQLite error.
+
+        Args:
+            question (str): The original natural language question.
+            candidate_sql (str): SQL produced by the generator.
+
+        Returns:
+            Optional[str]: ``None`` when the SQL is logically consistent
+                (reflector replied ``<ok>``); otherwise a non-empty logical
+                mismatch string to feed into the corrector.
+        """
+        reflection_prompt: str = (
+            "You are a SQL semantic auditor.\n"
+            "Given a SQL query, translate it to plain English, then decide if it "
+            "fully and correctly satisfies the user question below.\n\n"
+            f"User question: {question}\n\n"
+            f"SQL:\n```sql\n{candidate_sql}\n```\n\n"
+            "Instructions:\n"
+            "  • If the SQL correctly answers the question, reply ONLY with: <ok>\n"
+            "  • If there is ANY logical mismatch (wrong aggregation, wrong filter, "
+            "wrong column, MIN vs MAX, etc.), reply with:\n"
+            "    <error>One sentence describing the specific logical mismatch.</error>\n"
+            "Do NOT output anything else."
+        )
+        try:
+            llm = get_llm(role="reflector")
+            raw: str = llm.generate(reflection_prompt)
+            raw_stripped = raw.strip()
+            logger.info(
+                "[MasterPipeline | Phase 4ab] Reflection response: %s",
+                raw_stripped[:200],
+            )
+            if "<ok>" in raw_stripped.lower():
+                logger.info("[MasterPipeline | Phase 4ab] ✓ SQL passed reflection.")
+                return None
+            # Extract <error>...</error> content
+            import re as _re
+            err_match = _re.search(
+                r"<error>\s*(.*?)\s*</error>", raw_stripped, _re.DOTALL | _re.IGNORECASE
+            )
+            if err_match:
+                mismatch = err_match.group(1).strip()
+            else:
+                # Fallback: treat the whole response as the error
+                mismatch = raw_stripped
+            logger.warning(
+                "[MasterPipeline | Phase 4ab] ✗ Logical mismatch detected: %s", mismatch
+            )
+            return mismatch
+        except Exception as exc:  # noqa: BLE001
+            # Reflection is best-effort — never block the pipeline
+            logger.warning(
+                "[MasterPipeline | Phase 4ab] Reflection failed (skipping): %s", exc
+            )
+            return None
 
     # ------------------------------------------------------------------
     # Phase 4b: Semantic Validation
@@ -484,22 +553,23 @@ class MasterPipeline:
         )
         correction_prompt: str = (
             f"You are an expert {self.sql_dialect} Text-to-SQL correction agent.\n"
-            f"Repair the failed query using the schema, MCI metadata, "
-            f"semantic error, and MAGIC checklist.\n\n"
+            f"Repair the failed query using the schema, MCI metadata, the error "
+            f"description, and the MAGIC checklist below.\n\n"
             f"Question: {question}\n"
             f"{evidence_block}"
             f"\nPruned Schema:\n{pruned_ddl}\n\n"
             f"MCI Metadata:\n{metadata_context}\n\n"
             f"Failed SQL:\n```sql\n{bad_sql}\n```\n\n"
-            f"Semantic Error & Correction Hint:\n{error_message}\n\n"
+            f"Error / Logical Mismatch:\n{error_message}\n\n"
             f"MAGIC Checklist:\n{_MAGIC_GUIDELINES}\n"
             f"Past Guidelines:\n{guideline_memory or 'None'}\n\n"
-            f"Output ONLY the corrected {self.sql_dialect} SELECT query "
-            f"— no comments, no markdown.\n"
+            f"CRITICAL OUTPUT FORMAT: You MUST wrap the corrected SQL inside "
+            f"<sql> and </sql> XML tags.\n"
+            f"Example: <sql>SELECT COUNT(*) FROM customers WHERE segment = 'SME';</sql>\n"
+            f"Output ONLY the XML-tagged SQL — no prose, no markdown, no explanation.\n"
         )
         llm = get_llm(
             role="critic",
-            provider=self.critic_provider,
             model_name=self.critic_model,
         )
         try:
@@ -530,15 +600,16 @@ class MasterPipeline:
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> MasterPipelineResult:
-        """Executes the full four-phase pipeline for a single question.
+        """Executes the full pipeline for a single question.
 
         Phases summary:
-            1. CHESS pruning → Top-K tables (offline).
-            2. MCI enrichment → compact JSON metadata (offline).
-            3. Prompt assembly → token-optimised enriched prompt (offline).
-            4a. Generator LLM → candidate SQL (1 API call).
-            4b. SemanticErrorChecker → validate locally (offline).
-            4c. [Conditional] Critic LLM → corrected SQL (0 or 1 API call).
+            1.  CHESS pruning → Top-K tables (offline).
+            2.  MCI enrichment → compact JSON metadata (offline).
+            3.  Prompt assembly → token-optimised enriched prompt (offline).
+            4a. Generator LLM → candidate SQL (API call #1).
+            4ab.Reflection LLM (scout) → logical self-check (API call #2).
+            4b. SemanticErrorChecker → syntax/empty/null validation (offline).
+            4c. [Conditional] Critic LLM → corrected SQL (API call #3 max).
 
         Args:
             question (str): Natural language question to answer with SQL.
@@ -599,16 +670,29 @@ class MasterPipeline:
         generator_raw_sql: str = self._phase4a_generate(enriched_prompt)
         api_calls_made: int = 1
 
+        # ── Phase 4ab: Reflection — logical self-consistency (API call #2)
+        reflection_error: Optional[str] = self._phase4ab_reflect(
+            question=question, candidate_sql=generator_raw_sql
+        )
+        api_calls_made += 1  # always counts (scout is cheap)
+
         # ── Phase 4b: Semantic Validation (offline) ───────────────────
-        rows, error_message = self._phase4b_validate(
+        rows, semantic_error = self._phase4b_validate(
             db_path=db_path, sql=generator_raw_sql
         )
+
+        # Merge errors: prefer semantic error (concrete), then logical
+        error_message: Optional[str] = semantic_error or reflection_error
 
         final_sql: str = generator_raw_sql
         critic_corrected_sql: Optional[str] = None
 
-        # ── Phase 4c: MAGIC Critic Correction (API call #2, conditional)
+        # ── Phase 4c: MAGIC Critic Correction (API call #3, conditional)
         if error_message is not None:
+            logger.info(
+                "[MasterPipeline] Triggering corrector — reason: %s",
+                "semantic" if semantic_error else "logical reflection",
+            )
             critic_corrected_sql = self._phase4c_correct(
                 question=question,
                 pruned_ddl=pruning.pruned_schema_ddl,
@@ -632,8 +716,7 @@ class MasterPipeline:
                 )
             else:
                 logger.info(
-                    "[MasterPipeline] Critic correction validated. "
-                    "Rows: %d",
+                    "[MasterPipeline] Critic correction validated — rows: %d",
                     len(rows) if rows else 0,
                 )
 
@@ -655,7 +738,8 @@ class MasterPipeline:
             final_sql=final_sql,
             rows=rows,
             generator_raw_sql=generator_raw_sql,
-            semantic_error_message=error_message,
+            semantic_error_message=semantic_error,
+            reflection_error_message=reflection_error,
             critic_corrected_sql=critic_corrected_sql,
             api_calls_made=api_calls_made,
             prompt_char_count=len(enriched_prompt),

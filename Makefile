@@ -5,7 +5,7 @@
 export
 
 # Default parameters if not set in .env
-NUM_SAMPLES ?= 10
+NUM_SAMPLES ?= 50
 QUESTION ?= What is the ratio of customers who pay in EUR against customers who pay in CZK?
 DB_PATH ?= data_minidev/MINIDEV/dev_databases/debit_card_specializing/debit_card_specializing.sqlite
 
@@ -24,7 +24,8 @@ setup: .env
 
 # -------- DOCKER --------
 # Environment overrides for Docker exec to allow dynamic 'make' overrides
-DOCKER_ENV = -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) \
+DOCKER_ENV = -e PYTHONPATH=llm/src \
+             -e GENERATOR_PROVIDER=$(GENERATOR_PROVIDER) \
              -e GENERATOR_MODEL=$(GENERATOR_MODEL) \
              -e CRITIC_PROVIDER=$(CRITIC_PROVIDER) \
              -e CRITIC_MODEL=$(CRITIC_MODEL)

@@ -5,13 +5,11 @@ from typing import NotRequired, TypedDict
 
 """ Agentic Text-to-SQL workflow orchestrator built on LangGraph.
 
-Architecture inspired by the MAGIC (Multi-Agent Generative Improvement Cycle) paper
-(SynQo / Microsoft Research) and modernized with:
-  - LangGraph StateGraph for deterministic, inspectable agent routing.
-  - MCP (Model Context Protocol) stubs for schema exploration.
-  - NanoClaw-style sandboxed SQL execution stubs.
-  - Groq API for fast, low-latency SQL generation (LLaMA-4 Scout).
-  - Gemini API for high-quality feedback and correction reasoning.
+Architecture (Groq-only, Asymmetric):
+  - Generator : openai/gpt-oss-120b via Groq  (Senior Data Engineer)
+  - Corrector : openai/gpt-oss-20b  via Groq  (Syntax Fixer)
+  - Fallback  : meta-llama/llama-4-scout-17b-16e-instruct (on key exhaustion)
+  - Key rotation: instant cycle on HTTP 429, zero sleep between retries.
 
 Workflow:
     schema_exploration → sql_generation → execution_sandbox
