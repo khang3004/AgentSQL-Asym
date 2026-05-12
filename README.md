@@ -11,22 +11,22 @@ By decoupling the high-volume **Generation** task from the complex **Correction/
 
 ---
 
-## 🏗️ Architecture: Asymmetric Reasoning
+## 🏗️ Architecture: Asymmetric MasterPipeline
 
-AgentSQL utilizes an **Asymmetric Multi-Agent Architecture** powered by **LangGraph**. The workflow isolates concerns into distinct nodes, allowing for specialized model selection at each step.
+AgentSQL utilizes an **Asymmetric Multi-Agent Architecture** (MasterPipeline). The workflow strictly isolates offline pre-processing from online inference, allowing for specialized model selection and optimized token usage at each step.
 
 ![AgentSQL Architecture Workflow](latex_playground/tikz_artifacts/agentsql_workflow.png)
 
 
 > [!TIP]
-> **High-Quality Diagram**: A professional LaTeX TikZ version of this workflow is available in [agentsql_workflow.tex](file:///Users/KhangDS/Programing/HCMUS_Code/Scientific_Research_methods_code/forked_mini_dev_hcmus_underdogs/latex_playground/tikz_artifacts/agentsql_workflow.tex), suitable for academic publications and high-resolution reports.
+> **High-Quality Diagram**: A professional TikZ version of this workflow is available in [agentsql_workflow.tex](file:///Users/KhangDS/Programing/HCMUS_Code/Scientific_Research_methods_code/forked_mini_dev_hcmus_underdogs/latex_playground/tikz_artifacts/agentsql_workflow.tex), suitable for academic publications and high-resolution reports.
 
 
-### Core Components
-1.  **Schema Explorer (`nodes/explorer.py`)**: A "Model Context Protocol" (MCP) simulator that extracts precise DDL schema metadata and statistical row samples to build a high-fidelity context.
-2.  **SQL Generator (`nodes/generator.py`)**: Optimized for high-throughput generation using lightweight open-source models via Groq.
-3.  **Execution Sandbox (`tools/sandbox.py`)**: An isolated **SQLAlchemy** environment that executes predicted SQL against a private database to verify validity before final delivery.
-4.  **Resilient Critic (`nodes/corrector.py`)**: Activated only on failure. It performs deep semantic reasoning to identify the root cause of the error and provides a "Correction Guideline" for the generator.
+### Pipeline Phases
+1.  **Phase 1: CHESS Pruning (`tools/chess_linker.py`)**: Offline semantic filtering using lightweight embedding models (e.g., `bge-small`) to isolate only the most relevant tables and eliminate schema noise.
+2.  **Phase 2: MCI-SQL Enrichment (`tools/mci_sql_pipeline.py`)**: Extracts precise metadata (cardinalities, min/max values, exact row samples) from the pruned schema to build a high-fidelity context.
+3.  **Phase 4a/b: Generator & Reflector (`tools/master_pipeline.py`)**: The core generation loop. An optimized open-source model (e.g., `gpt-oss-120b` or `llama-4-scout-17b`) generates the SQL, which is immediately evaluated by a **Reflector** for logical self-consistency via back-translation.
+4.  **Phase 4c: Resilient Critic (`nodes/corrector.py`)**: Activated *only* if the Execution Sandbox detects a syntax error or the Reflector detects a logical mismatch. Powered by a high-reasoning model (e.g., `gemini-2.5-flash`), it performs targeted patching using the MAGIC checklist.
 
 ---
 
@@ -49,6 +49,9 @@ We support the full evaluation suite required for the BIRD-SQL benchmark:
 | **VES** | **Valid Efficiency Score** | Measures the runtime efficiency of the SQL (Speed vs. Ground Truth). |
 | **Soft F1** | **Semantic F1 Score** | Measures partial correctness by comparing row-level data matches (Precision/Recall). |
 
+> [!NOTE]
+> Recent evaluations of the MasterPipeline on the BIRD Mini-Dev dataset demonstrate highly competitive **Execution Accuracy (EX)** while significantly reducing API costs compared to monolithic GPT-4/Claude-3 setups.
+
 ---
 
 ## 🚀 Quick Start
@@ -69,9 +72,9 @@ make shell
 ```
 
 ### 3. Run Evaluation
-Execute the AgentSQL pipeline on the Mini-Dev dataset:
+Execute the AgentSQL MasterPipeline on the Mini-Dev dataset:
 ```bash
-make eval-agentsql NUM_SAMPLES=20
+make eval-master NUM_SAMPLES=20
 ```
 
 ---

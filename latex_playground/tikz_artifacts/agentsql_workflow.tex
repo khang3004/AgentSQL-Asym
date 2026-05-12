@@ -1,24 +1,15 @@
 \documentclass[tikz, border=10pt]{standalone}
 \usepackage{tikz}
-\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc, shadows, backgrounds, fit}
-
-% Colors
-\definecolor{gen_color}{RGB}{232, 245, 233} % Light Green
-\definecolor{gen_border}{RGB}{76, 175, 80}
-\definecolor{critic_color}{RGB}{255, 248, 225} % Light Amber
-\definecolor{critic_border}{RGB}{255, 193, 7}
-\definecolor{sandbox_color}{RGB}{236, 239, 241} % Light Gray
-\definecolor{sandbox_border}{RGB}{96, 125, 139}
-\definecolor{io_color}{RGB}{227, 242, 253} % Light Blue
-\definecolor{io_border}{RGB}{33, 150, 243}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, shadows, backgrounds, fit}
 
 \begin{document}
+
 \begin{tikzpicture}[
     node distance=1.5cm and 2cm,
     font=\sffamily\small,
     >=Stealth,
     process/.style={
-        rectangle, minimum width=3.5cm, minimum height=1.2cm, 
+        rectangle, minimum width=3.8cm, minimum height=1.3cm, 
         text centered, draw=black!70, fill=white, 
         rounded corners=3pt, line width=0.8pt,
         drop shadow={opacity=0.2}
@@ -38,32 +29,64 @@
     feedback/.style={arrow, dashed, draw=red!60}
 ]
 
+    % Colors
+    \definecolor{gen_color}{RGB}{232, 245, 233}
+    \definecolor{gen_border}{RGB}{76, 175, 80}
+    \definecolor{critic_color}{RGB}{255, 248, 225}
+    \definecolor{critic_border}{RGB}{255, 193, 7}
+    \definecolor{sandbox_color}{RGB}{236, 239, 241}
+    \definecolor{sandbox_border}{RGB}{96, 125, 139}
+    \definecolor{io_color}{RGB}{227, 242, 253}
+    \definecolor{io_border}{RGB}{33, 150, 243}
+    \definecolor{offline_color}{RGB}{243, 229, 245}
+    \definecolor{offline_border}{RGB}{156, 39, 176}
+
     % Nodes
-    \node (input) [io] {User Question};
-    \node (explorer) [process, below=of input] {Schema Explorer \\ \scriptsize (MCP Protocol)};
-    \node (generator) [process, fill=gen_color, draw=gen_border, below=of explorer] {\textbf{SQL Generator} \\ \scriptsize Llama-4 Scout};
-    \node (sandbox) [decision, below=of generator] {Execution \\ Sandbox};
-    \node (output) [io, right=3cm of sandbox] {Final Result};
-    \node (critic) [process, fill=critic_color, draw=critic_border, left=3cm of sandbox] {\textbf{Resilient Critic} \\ \scriptsize Gemini-2.5 Flash};
-    \node (feedback_node) [process, above=of critic] {Diagnostic Feedback};
+    \node (indexer) [process, fill=offline_color, draw=offline_border] {\textbf{Offline Indexing} \\ \scriptsize \texttt{build\_offline\_index.py} \\ \scriptsize FAISS Index Creation};
+
+    \node (input) [io, right=2cm of indexer] {User Question};
+    
+    \node (chess) [process, fill=offline_color, draw=offline_border, below=0.8cm of input] {\textbf{CHESS Pruning} \\ \scriptsize \texttt{tools/chess\_linker.py} \\ \scriptsize Semantic Filtering};
+    
+    \node (mci) [process, fill=offline_color, draw=offline_border, below=0.8cm of chess] {\textbf{MCI-SQL} \\ \scriptsize \texttt{tools/mci\_sql\_pipeline.py} \\ \scriptsize Metadata Enrichment};
+
+    \node (generator) [process, fill=gen_color, draw=gen_border, below=0.8cm of mci] {\textbf{SQL Generator} \\ \scriptsize \texttt{nodes/generator.py}};
+    
+    \node (reflector) [process, below=0.8cm of generator] {\textbf{Reflector} \\ \scriptsize \texttt{nodes/generator.py}};
+
+    \node (sandbox) [decision, below=0.8cm of reflector] {Execution \\ Sandbox};
+    
+    \node (output) [io, below=0.8cm of sandbox] {Final Result};
+    
+    \node (critic) [process, fill=critic_color, draw=critic_border, right=3.5cm of sandbox] {\textbf{Resilient Critic} \\ \scriptsize \texttt{nodes/corrector.py}};
 
     % Links
-    \draw [arrow] (input) -- (explorer);
-    \draw [arrow] (explorer) -- (generator);
-    \draw [arrow] (generator) -- (sandbox);
+    \draw [arrow, dashed] (indexer.south) |- node[above, near end, font=\scriptsize] {Loads FAISS} (chess.west);
     
-    \draw [arrow] (sandbox) -- node[above] {Success} (output);
+    \draw [arrow] (input) -- (chess);
+    \draw [arrow] (chess) -- (mci);
+    \draw [arrow] (mci) -- node[left, font=\scriptsize] {Orchestrated by \texttt{tools/master\_pipeline.py}} (generator);
+    \draw [arrow] (generator) -- (reflector);
+    \draw [arrow] (reflector) -- node[left] {Logic OK} (sandbox);
     
-    \draw [arrow] (sandbox) -- node[above] {Error} (critic);
-    \draw [arrow] (critic) -- (feedback_node);
-    \draw [arrow] (feedback_node) |- (generator);
+    \draw [arrow] (sandbox) -- node[left] {Success} (output);
+    
+    \draw [feedback] (sandbox.east) -- node[above] {Syntax Error} (critic.west);
+    \draw [feedback] (reflector.east) -| node[above, near start] {Logic Error} (critic.north);
+    
+    \draw [feedback] (critic.south) |- ++(0,-0.8) -| node[below, near start] {Corrected SQL} (sandbox.south);
 
-    % Legend / Subgraph indicator
+    % Legend / Subgraph indicators
     \begin{scope}[on background layer]
+        \node[draw=offline_border, dashed, line width=1pt, fill=black!2, inner sep=15pt, 
+              rounded corners=10pt, fit=(indexer) (chess) (mci)] (offline_box) {};
+        \node[anchor=south west, font=\sffamily\bfseries\footnotesize, text=offline_border] 
+              at (offline_box.north west) {OFFLINE PRE-PROCESSING};
+              
         \node[draw=black!30, dashed, line width=1pt, fill=black!2, inner sep=15pt, 
-              rounded corners=10pt, fit=(generator) (critic) (feedback_node)] (asym_box) {};
+              rounded corners=10pt, fit=(generator) (reflector) (critic)] (asym_box) {};
         \node[anchor=north west, font=\sffamily\bfseries\footnotesize, text=black!60] 
-              at (asym_box.north west) {ASYMMETRIC MULTI-AGENT STRATEGY};
+              at (asym_box.north west) {ASYMMETRIC LLM LOOP};
     \end{scope}
 
 \end{tikzpicture}
