@@ -13,9 +13,13 @@ import numpy as np
 from statistics import mean
 
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from llm.src.text2sql_agent.tools.master_pipeline import MasterPipeline
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_SRC = os.path.join(_ROOT, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+from text2sql_agent.tools.master_pipeline import MasterPipeline
 from research.evaluator import calculate_metrics
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")

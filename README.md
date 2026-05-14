@@ -19,7 +19,7 @@ AgentSQL utilizes an **Asymmetric Multi-Agent Architecture** (MasterPipeline). T
 
 
 > [!TIP]
-> **High-Quality Diagram**: A professional TikZ version of this workflow is available in [agentsql_workflow.tex](file:///Users/KhangDS/Programing/HCMUS_Code/Scientific_Research_methods_code/forked_mini_dev_hcmus_underdogs/latex_playground/tikz_artifacts/agentsql_workflow.tex), suitable for academic publications and high-resolution reports.
+> **High-Quality Diagram**: TikZ source lives at [latex_playground/tikz_artifacts/agentsql_workflow.tex](latex_playground/tikz_artifacts/agentsql_workflow.tex).
 
 
 ### Pipeline Phases
@@ -72,9 +72,16 @@ make shell
 ```
 
 ### 3. Run Evaluation
-Execute the AgentSQL MasterPipeline on the Mini-Dev dataset:
+Build the CHESS FAISS index once (required for MasterPipeline): `make build-index`. Optional smoke test for the LangGraph agent: `make smoke`.
+
+MasterPipeline on Mini-Dev:
 ```bash
 make eval-master NUM_SAMPLES=20
+```
+
+LangGraph-only evaluation:
+```bash
+make eval-langgraph NUM_SAMPLES=20
 ```
 
 ---
@@ -83,12 +90,15 @@ make eval-master NUM_SAMPLES=20
 
 ```text
 .
-├── research/               # Unified evaluation suite & SOTA comparison
-├── llm/src/text2sql_agent/ # Core Framework (LangGraph Nodes, Tools, State)
-├── evaluation/             # Legacy baseline evaluation scripts
-├── data_minidev/           # BIRD-SQL dataset and SQLite databases
-├── Makefile                # High-level orchestration commands
-└── docker-compose.yml      # Isolated execution environment
+├── research/                 # Evaluators (LangGraph + MasterPipeline), metrics, SoTA compare
+├── src/
+│   ├── text2sql_agent/        # LangGraph workflow, tools, MasterPipeline
+│   ├── build_offline_index.py # CHESS FAISS index builder
+│   └── smoke_test_agent.py    # One-shot graph smoke test
+├── scripts/                   # Dataset download helpers
+├── data_minidev/              # BIRD mini-dev (gitignored; use make pull-data)
+├── Makefile
+└── docker-compose.yml
 ```
 
 ---

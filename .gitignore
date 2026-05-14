@@ -28,18 +28,19 @@ docs/
 # Data directories
 data_minidev/
 mini_dev_data/
-llm/mini_dev_data/
+
+# Legacy paths (kept so local clones still ignore old dirs)
+llm/
 *.sqlite
 *.db
 
 # Evaluation Results & Outputs
 eval_result/
 exp_result/
-llm/exp_result/
 *.log
 
 #Aent Skills & Workflow
 .agents/
 skills-lock.json
-llm/src/text2sql_agent/index/metadata.pkl
-llm/src/text2sql_agent/index/schema_index.faiss
+src/text2sql_agent/index/metadata.pkl
+src/text2sql_agent/index/schema_index.faiss

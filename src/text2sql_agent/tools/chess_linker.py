@@ -39,8 +39,8 @@ Design decisions
 Typical usage::
 
     linker = ChessLinker(
-        index_path="llm/src/text2sql_agent/index/schema_index.faiss",
-        metadata_path="llm/src/text2sql_agent/index/metadata.pkl",
+        index_path="src/text2sql_agent/index/schema_index.faiss",
+        metadata_path="src/text2sql_agent/index/metadata.pkl",
     )
     result = linker.prune(
         question="How many customers are in the VIP segment?",
@@ -54,7 +54,7 @@ Typical usage::
 
 Run the indexer first::
 
-    python llm/src/build_offline_index.py
+    python src/build_offline_index.py
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ except ImportError:
 
     INDEX_FILENAME: str = "schema_index.faiss"
     METADATA_FILENAME: str = "metadata.pkl"
-    DEFAULT_OUTPUT_DIR: str = "llm/src/text2sql_agent/index"
+    DEFAULT_OUTPUT_DIR: str = "src/text2sql_agent/index"
     DEFAULT_MODEL: str = "BAAI/bge-small-en-v1.5"
 
 logger = logging.getLogger(__name__)
@@ -260,12 +260,12 @@ class ChessLinker:
         if not os.path.isfile(self.index_path):
             raise FileNotFoundError(
                 f"[ChessLinker] FAISS index not found: '{self.index_path}'.\n"
-                "Run 'python llm/src/build_offline_index.py' to build it first."
+                "Run 'python src/build_offline_index.py' to build it first."
             )
         if not os.path.isfile(self.metadata_path):
             raise FileNotFoundError(
                 f"[ChessLinker] Metadata not found: '{self.metadata_path}'.\n"
-                "Run 'python llm/src/build_offline_index.py' to build it first."
+                "Run 'python src/build_offline_index.py' to build it first."
             )
 
         logger.info(

@@ -47,6 +47,7 @@ Ensure you have Python 3.11+ and `uv` installed.
 ```bash
 make setup
 source .venv/bin/activate
+export PYTHONPATH=src   # required for `text2sql_agent` and `table_schema` imports
 ```
 
 ---
@@ -56,9 +57,9 @@ source .venv/bin/activate
 Once your environment is ready, you can execute the evaluation pipeline.
 
 ### 1. Smoke Test
-Verify that the LangGraph workflow and model connections are functional:
+Verify the LangGraph workflow and model connections:
 ```bash
-make test-master
+make smoke
 ```
 
 ### 2. Full Evaluation
@@ -68,17 +69,27 @@ Run the asymmetric MasterPipeline on the Mini-Dev dataset. This will calculate *
 make eval-master NUM_SAMPLES=50
 ```
 
+LangGraph-only evaluation (no MasterPipeline):
+```bash
+make eval-langgraph NUM_SAMPLES=50
+```
+
 ### 3. SOTA Comparison
-After running the evaluation, compare your results against the baseline monolithic scores:
+After running LangGraph evaluation, compare your results against the baseline monolithic scores:
 ```bash
 make compare-sota
 ```
+
+> **Note:** `compare-sota` reads `results/agentsql_evaluation.json` produced by `make eval-langgraph`.
 
 ---
 
 ## 📊 Understanding the Metrics
 
-The evaluation results are saved to `results/agentsql_evaluation.json`. The summary output will include:
+- **LangGraph eval** (`make eval-langgraph`): per-sample log in `results/agentsql_evaluation.json`.
+- **MasterPipeline eval** (`make eval-master`): checkpoint log in `results/master_pipeline_evaluation.json`.
+
+Summary metrics include:
 
 - **Execution Accuracy (EX)**: Percentage of queries where the output data matches exactly.
 - **Valid Execution Score (VES)**: Efficiency reward based on the execution time ratio vs. ground truth SQL.

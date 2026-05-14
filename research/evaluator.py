@@ -13,10 +13,14 @@ import numpy as np
 from statistics import mean
 
 import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from llm.src.text2sql_agent.workflow.graph import compile_workflow
-from llm.src.text2sql_agent.core.state import AgentState
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_SRC = os.path.join(_ROOT, "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+from text2sql_agent.workflow.graph import compile_workflow
+from text2sql_agent.core.state import AgentState
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger(__name__)

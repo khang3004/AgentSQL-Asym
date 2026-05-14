@@ -159,7 +159,7 @@ class MasterPipeline:
     .. note::
         The offline FAISS index must be built before running any pipeline
         queries.  Run ``make build-index`` (Docker) or
-        ``python llm/src/build_offline_index.py`` (local) once.
+        ``python src/build_offline_index.py`` (local) once.
 
     Attributes:
         top_k (int): Number of tables to retain after CHESS pruning.
@@ -181,7 +181,7 @@ class MasterPipeline:
         self,
         top_k: int = 3,
         embedding_model: str = "BAAI/bge-small-en-v1.5",
-        index_dir: str = "llm/src/text2sql_agent/index",
+        index_dir: str = "src/text2sql_agent/index",
         generator_provider: str = "groq",
         generator_model: str = "meta-llama/llama-4-scout-17b-16e-instruct",
         critic_provider: str = "google",
@@ -200,8 +200,8 @@ class MasterPipeline:
             index_dir (str): Directory containing the pre-built FAISS index
                 (``schema_index.faiss``) and metadata (``metadata.pkl``).
                 Build these with ``make build-index`` or
-                ``python llm/src/build_offline_index.py``.
-                Defaults to ``"llm/src/text2sql_agent/index"``.
+                ``python src/build_offline_index.py``.
+            Defaults to ``"src/text2sql_agent/index"``.
             generator_provider (str): Provider for the generator LLM.
                 Defaults to ``"groq"``.
             generator_model (str): Generator model identifier.

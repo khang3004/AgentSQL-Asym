@@ -118,9 +118,7 @@ class PipelineResult:
 
 
 # ---------------------------------------------------------------------------
-# Dummy LLM Stubs
-# (Replace with real ``groq_request.connect_groq`` /
-#  ``gemini_request.connect_gemini`` in production.)
+# Dummy LLM Stubs (integration tests); production uses ``get_llm``.
 # ---------------------------------------------------------------------------
 
 
@@ -131,16 +129,13 @@ def _stub_generator_llm(
 ) -> str:
     """Stub simulating the Groq Llama-4-Scout SQL generator LLM call.
 
-    In production this function is replaced by a call to
-    ``llm.src.groq_request.connect_groq`` (or the ``get_llm`` factory in
-    ``text2sql_agent.core.llm_factory``).  The stub is intentionally
-    deterministic so that the integration logic can be unit-tested offline.
+    In production this function is replaced by ``get_llm`` from
+    ``text2sql_agent.core.llm_factory``.
 
     Args:
         enriched_prompt (str): The fully assembled prompt, including the
             MCI metadata context and the natural language question.
-        model (str): Groq model identifier.  Defaults to the fast
-            ``llama-4-scout-17b`` model used in the project's groq_request.py.
+        model (str): Groq model identifier.
 
     Returns:
         str: A dummy SQL SELECT string.
@@ -161,14 +156,13 @@ def _stub_critic_llm(
 ) -> str:
     """Stub simulating the Gemini 2.5 Flash critic LLM correction call.
 
-    In production this function delegates to
-    ``llm.src.gemini_request.connect_gemini``.
+    In production this function delegates to ``get_llm`` from
+    ``text2sql_agent.core.llm_factory``.
 
     Args:
         correction_prompt (str): The correction prompt including the semantic
             error description and its embedded suggestion string.
-        model (str): Gemini model identifier.  Defaults to ``gemini-2.5-flash``
-            as used in the project's gemini_request.py.
+        model (str): Gemini model identifier.  Defaults to ``gemini-2.5-flash``.
 
     Returns:
         str: A corrected SQL SELECT string.
@@ -524,9 +518,8 @@ if __name__ == "__main__":
 
     # Build a minimal DDL for the demo (normally from table_schema.py)
     try:
-        import sys
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
         from table_schema import generate_schema_prompt_sqlite
+
         ddl = generate_schema_prompt_sqlite(args.db_path, num_rows=3)
     except ImportError:
         ddl = "-- DDL not available in standalone mode."

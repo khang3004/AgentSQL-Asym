@@ -30,13 +30,13 @@ Architecture rationale
 Usage::
 
     # Index every database found in the default BIRD Mini-Dev data directory
-    python llm/src/build_offline_index.py
+    python src/build_offline_index.py
 
     # Custom data root and output paths
-    python llm/src/build_offline_index.py \\
+    python src/build_offline_index.py \\
         --tables_json data_minidev/MINIDEV/dev_tables.json \\
         --db_root     data_minidev/MINIDEV/dev_databases \\
-        --output_dir  llm/src/text2sql_agent/index \\
+        --output_dir  src/text2sql_agent/index \\
         --model       BAAI/bge-small-en-v1.5 \\
         --batch_size  64
 
@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL: str = "BAAI/bge-small-en-v1.5"
 DEFAULT_TABLES_JSON: str = "data_minidev/MINIDEV/dev_tables.json"
 DEFAULT_DB_ROOT: str = "data_minidev/MINIDEV/dev_databases"
-DEFAULT_OUTPUT_DIR: str = "llm/src/text2sql_agent/index"
+DEFAULT_OUTPUT_DIR: str = "src/text2sql_agent/index"
 INDEX_FILENAME: str = "schema_index.faiss"
 METADATA_FILENAME: str = "metadata.pkl"
 

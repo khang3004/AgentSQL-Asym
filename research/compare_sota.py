@@ -18,7 +18,7 @@ def main():
     
     if not agent_data:
         print(f"[-] ERROR: Could not find {agent_results_path}.")
-        print("[-] Please run 'make eval-agentsql' first.")
+        print("[-] Please run 'make eval-langgraph' first.")
         return
         
     num_samples = len(agent_data)
