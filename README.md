@@ -41,13 +41,42 @@ AgentSQL utilizes an **Asymmetric Multi-Agent Architecture** (MasterPipeline). T
 
 ## 📈 Evaluation Metrics
 
-We support the full evaluation suite required for the BIRD-SQL benchmark:
+We support the full evaluation suite required for the BIRD-SQL benchmark. To ensure robust mathematical alignment with the benchmark, our evaluation engine computes:
 
-| Metric | Definition | Importance |
-| :--- | :--- | :--- |
-| **EX** | **Execution Accuracy** | Measures if the predicted SQL returns the exact same data as the ground truth. |
-| **VES** | **Valid Efficiency Score** | Measures the runtime efficiency of the SQL (Speed vs. Ground Truth). |
-| **Soft F1** | **Semantic F1 Score** | Measures partial correctness by comparing row-level data matches (Precision/Recall). |
+### 1. Execution Accuracy (EX)
+Execution Accuracy measures the proportion of questions where the predicted SQL query returns the exact same result set as the ground-truth SQL query.
+
+$$
+\text{EX} = \frac{1}{N} \sum_{i=1}^{N} \mathbb{I}\left(V(Y_i) = V(\hat{Y}_i)\right)
+$$
+
+*Where:*
+- $N$ is the total number of evaluation samples.
+- $V(Y_i)$ is the execution result set of the ground-truth SQL $Y_i$.
+- $V(\hat{Y}_i)$ is the execution result set of the predicted SQL $\hat{Y}_i$.
+- $\mathbb{I}(\cdot)$ is the indicator function, returning $1$ if the condition is true and $0$ otherwise.
+
+### 2. Valid Efficiency Score (VES)
+Valid Efficiency Score evaluates the computational efficiency of the valid generated SQL queries, measuring execution speed relative to the human-written ground truth.
+
+$$
+\text{VES} = \frac{\sum_{i=1}^{N} \mathbb{I}\left(V(Y_i) = V(\hat{Y}_i)\right) \cdot R(Y_i, \hat{Y}_i)}{\sum_{i=1}^{N} \mathbb{I}\left(V(Y_i) = V(\hat{Y}_i)\right)}
+$$
+
+*Where the reward $R(Y_i, \hat{Y}_i)$ is defined based on the relative execution efficiency $\tau = \frac{\tau_{Y_i}}{\tau_{\hat{Y}_i}}$:*
+- $R = 1.25$ if $\tau \geq 2$ (Predicted is at least 2x faster)
+- $R = 1.00$ if $1 \leq \tau < 2$ (Predicted is faster or equal)
+- $R = 0.75$ if $0.5 \leq \tau < 1$ (Predicted is slightly slower)
+- $R = 0.50$ if $\tau < 0.5$ (Predicted is significantly slower)
+
+### 3. Soft F1 Score (Semantic F1)
+Soft F1 acts as a proxy for partial correctness. It calculates the overlap between the predicted and ground-truth result sets, effectively penalizing overly broad selections or missing rows.
+
+$$
+\text{Soft F1} = \frac{2 \times \text{Precision} \times \text{Recall}}{\text{Precision} + \text{Recall}}
+$$
+
+*Where Precision and Recall evaluate the intersection of sets of row tokens between the predicted result table and the ground-truth result table.*
 
 > [!NOTE]
 > Recent evaluations of the MasterPipeline on the BIRD Mini-Dev dataset demonstrate highly competitive **Execution Accuracy (EX)** while significantly reducing API costs compared to monolithic GPT-4/Claude-3 setups.
