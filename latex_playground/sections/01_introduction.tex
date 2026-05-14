@@ -1,0 +1,20 @@
+\section{Introduction}
+\label{sec:intro}
+
+Translating natural language into executable Structured Query Language (Text-to-SQL) has emerged as a pivotal capability for enabling non-expert users to interrogate large-scale relational databases. Despite remarkable progress driven by Large Language Models (LLMs), the gap between research prototypes and production-grade interfaces remains significant. Current systems face three interrelated challenges:
+\begin{enumerate}
+    \item \textbf{Schema Ambiguity}: Enterprise databases routinely contain hundreds of tables with cryptic naming conventions, causing LLMs to hallucinate non-existent columns or misinterpret join paths \parencite{li2024can, floratou2024broken}.
+    \item \textbf{Error Taxonomy}: Existing correction mechanisms conflate syntactical errors (detectable by the database engine) with logical errors (semantically incorrect but syntactically valid queries). A unified correction prompt wastes reasoning capacity on trivially diagnosable failures.
+    \item \textbf{Cost--Accuracy Trade-off}: Monolithic frontier-model approaches (e.g., GPT-4, Claude~3) achieve high accuracy but incur prohibitive per-query costs, making large-scale batch evaluation economically infeasible.
+\end{enumerate}
+
+To address these challenges, we present \highlight{AgentSQL}, an asymmetric multi-agent pipeline that decouples schema understanding from SQL generation and, crucially, separates logical validation from syntactical correction. AgentSQL integrates three complementary upstream modules---CHESS-based semantic pruning \parencite{talaei2024chess}, MCI-SQL metadata enrichment \parencite{zheng2024mcisql}, and MAGIC self-correction guidelines \parencite{gu2024magic}---into a unified four-phase pipeline orchestrated by a \texttt{MasterPipeline} class. At its core lies an \emph{Asymmetric LLM Loop}: a lightweight \textbf{Reflector} performs back-translation-based logical verification at near-zero latency, while a high-reasoning \textbf{Resilient Critic} is invoked \emph{only} when errors are detected, keeping API costs bounded to at most three calls per question.
+
+\medskip
+\noindent\textbf{Contributions.} Our main contributions are:
+\begin{itemize}
+    \item A modular, four-phase pipeline architecture with strict cost invariants ($\leq 3$ LLM API calls per question) and full LangSmith observability.
+    \item A three-tier Semantic State Evaluation layer (\texttt{SemanticErrorChecker}) that classifies execution outcomes into \textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult} states, each carrying an actionable correction suggestion.
+    \item A round-robin \texttt{KeyRotator} abstraction supporting $N$ API keys per provider with zero-sleep rotation on HTTP~429, enabling sustained high-throughput batch evaluation.
+    \item Preliminary evaluation on the BIRD mini-dev benchmark demonstrating 80\% Execution Accuracy with an average of 2.0 API calls per question.
+\end{itemize}

@@ -1,92 +1,126 @@
-\documentclass[tikz, border=10pt]{standalone}
+\documentclass[tikz, border=12pt]{standalone}
 \usepackage{tikz}
-\usetikzlibrary{shapes.geometric, arrows.meta, positioning, shadows, backgrounds, fit}
+\usepackage{amsmath}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, shadows.blur, backgrounds, fit, calc}
 
 \begin{document}
 
 \begin{tikzpicture}[
-    node distance=1.5cm and 2cm,
-    font=\sffamily\small,
+    node distance=1.2cm and 2.5cm,
+    font=\sffamily\footnotesize,
     >=Stealth,
-    process/.style={
-        rectangle, minimum width=3.8cm, minimum height=1.3cm, 
-        text centered, draw=black!70, fill=white, 
-        rounded corners=3pt, line width=0.8pt,
-        drop shadow={opacity=0.2}
+    % --- Styles ---
+    phase/.style={
+        rectangle, minimum width=5.2cm, minimum height=1.1cm,
+        text centered, rounded corners=4pt, line width=0.7pt,
+        blur shadow={shadow blur steps=6, shadow xshift=0.5pt, shadow yshift=-1pt}
     },
     io/.style={
-        trapezium, trapezium left angle=70, trapezium right angle=110, 
-        minimum width=3cm, minimum height=1cm, 
-        text centered, draw=io_border, fill=io_color,
-        line width=1pt, drop shadow={opacity=0.2}
+        trapezium, trapezium left angle=70, trapezium right angle=110,
+        minimum width=3.5cm, minimum height=0.9cm,
+        text centered, draw=io_border, fill=io_fill,
+        line width=0.8pt, blur shadow={shadow blur steps=4}
     },
     decision/.style={
-        diamond, aspect=2, minimum width=3.5cm, minimum height=1cm, 
-        text centered, draw=sandbox_border, fill=sandbox_color, 
-        line width=1pt, drop shadow={opacity=0.2}
+        diamond, aspect=2.5, minimum width=2.8cm,
+        inner sep=1pt, text centered, draw=sandbox_border, fill=sandbox_fill,
+        line width=0.8pt, blur shadow={shadow blur steps=4}
     },
-    arrow/.style={thick, ->, line width=1pt, draw=black!60},
-    feedback/.style={arrow, dashed, draw=red!60}
+    arrow/.style={thick, ->, line width=0.8pt, draw=black!55},
+    feedback/.style={thick, ->, dashed, line width=0.8pt, draw=red!55},
+    label/.style={font=\sffamily\scriptsize, text=black!60}
 ]
 
-    % Colors
-    \definecolor{gen_color}{RGB}{232, 245, 233}
+    % ── Colour Palette ──────────────────────────────────────────────────
+    \definecolor{chess_fill}{RGB}{227, 242, 253}   % blue-50
+    \definecolor{chess_border}{RGB}{33, 150, 243}   % blue-500
+    \definecolor{mci_fill}{RGB}{243, 229, 245}      % purple-50
+    \definecolor{mci_border}{RGB}{156, 39, 176}     % purple-500
+    \definecolor{asm_fill}{RGB}{232, 245, 233}      % green-50
+    \definecolor{asm_border}{RGB}{76, 175, 80}      % green-500
+    \definecolor{gen_fill}{RGB}{232, 245, 233}
     \definecolor{gen_border}{RGB}{76, 175, 80}
-    \definecolor{critic_color}{RGB}{255, 248, 225}
-    \definecolor{critic_border}{RGB}{255, 193, 7}
-    \definecolor{sandbox_color}{RGB}{236, 239, 241}
-    \definecolor{sandbox_border}{RGB}{96, 125, 139}
-    \definecolor{io_color}{RGB}{227, 242, 253}
-    \definecolor{io_border}{RGB}{33, 150, 243}
-    \definecolor{offline_color}{RGB}{243, 229, 245}
-    \definecolor{offline_border}{RGB}{156, 39, 176}
+    \definecolor{reflect_fill}{RGB}{255, 253, 231}  % yellow-50
+    \definecolor{reflect_border}{RGB}{255, 179, 0}  % amber-600
+    \definecolor{critic_fill}{RGB}{255, 235, 238}   % red-50
+    \definecolor{critic_border}{RGB}{229, 57, 53}   % red-600
+    \definecolor{sandbox_fill}{RGB}{236, 239, 241}  % blueGrey-50
+    \definecolor{sandbox_border}{RGB}{96, 125, 139} % blueGrey-500
+    \definecolor{io_fill}{RGB}{255, 248, 225}       % amber-50
+    \definecolor{io_border}{RGB}{255, 160, 0}       % amber-700
 
-    % Nodes
-    \node (indexer) [process, fill=offline_color, draw=offline_border] {\textbf{Offline Indexing} \\ \scriptsize \texttt{build\_offline\_index.py} \\ \scriptsize FAISS Index Creation};
+    % ── NODES ───────────────────────────────────────────────────────────
 
-    \node (input) [io, right=2cm of indexer] {User Question};
-    
-    \node (chess) [process, fill=offline_color, draw=offline_border, below=0.8cm of input] {\textbf{CHESS Pruning} \\ \scriptsize \texttt{tools/chess\_linker.py} \\ \scriptsize Semantic Filtering};
-    
-    \node (mci) [process, fill=offline_color, draw=offline_border, below=0.8cm of chess] {\textbf{MCI-SQL} \\ \scriptsize \texttt{tools/mci\_sql\_pipeline.py} \\ \scriptsize Metadata Enrichment};
+    % Input
+    \node (input) [io] {\textbf{NL Question} $Q$};
 
-    \node (generator) [process, fill=gen_color, draw=gen_border, below=0.8cm of mci] {\textbf{SQL Generator} \\ \scriptsize \texttt{nodes/generator.py}};
-    
-    \node (reflector) [process, below=0.8cm of generator] {\textbf{Reflector} \\ \scriptsize \texttt{nodes/generator.py}};
+    % Phase 1
+    \node (chess) [phase, fill=chess_fill, draw=chess_border, below=1cm of input]
+        {\textbf{Phase 1: CHESS Pruning} \\ \scriptsize FAISS Top-$k$ retrieval};
 
-    \node (sandbox) [decision, below=0.8cm of reflector] {Execution \\ Sandbox};
-    
-    \node (output) [io, below=0.8cm of sandbox] {Final Result};
-    
-    \node (critic) [process, fill=critic_color, draw=critic_border, right=3.5cm of sandbox] {\textbf{Resilient Critic} \\ \scriptsize \texttt{nodes/corrector.py}};
+    % Phase 2
+    \node (mci) [phase, fill=mci_fill, draw=mci_border, below=0.9cm of chess]
+        {\textbf{Phase 2: MCI-SQL Enrichment} \\ \scriptsize MIN/MAX, cardinality, samples};
 
-    % Links
-    \draw [arrow, dashed] (indexer.south) |- node[above, near end, font=\scriptsize] {Loads FAISS} (chess.west);
-    
-    \draw [arrow] (input) -- (chess);
-    \draw [arrow] (chess) -- (mci);
-    \draw [arrow] (mci) -- node[left, font=\scriptsize] {Orchestrated by \texttt{tools/master\_pipeline.py}} (generator);
-    \draw [arrow] (generator) -- (reflector);
-    \draw [arrow] (reflector) -- node[left] {Logic OK} (sandbox);
-    
-    \draw [arrow] (sandbox) -- node[left] {Success} (output);
-    
-    \draw [feedback] (sandbox.east) -- node[above] {Syntax Error} (critic.west);
-    \draw [feedback] (reflector.east) -| node[above, near start] {Logic Error} (critic.north);
-    
-    \draw [feedback] (critic.south) |- ++(0,-0.8) -| node[below, near start] {Corrected SQL} (sandbox.south);
+    % Phase 3
+    \node (asm) [phase, fill=asm_fill, draw=asm_border, below=0.9cm of mci]
+        {\textbf{Phase 3: Context Assembly} \\ \scriptsize DDL + MCI JSON + MAGIC guidelines};
 
-    % Legend / Subgraph indicators
+    % Phase 4a
+    \node (gen) [phase, fill=gen_fill, draw=gen_border, below=0.9cm of asm]
+        {\textbf{Phase 4a: Generator} \\ \scriptsize \texttt{llama-4-scout-17b} via Groq};
+
+    % Phase 4ab
+    \node (reflect) [phase, fill=reflect_fill, draw=reflect_border, below=0.9cm of gen]
+        {\textbf{Phase 4ab: Reflector} \\ \scriptsize Back-translate SQL $\to$ English};
+
+    % Phase 4b — Semantic Validation
+    \node (sandbox) [decision, below=0.9cm of reflect]
+        {\scriptsize Semantic \\ \scriptsize Validation};
+
+    % Output
+    \node (output) [io, below=0.9cm of sandbox] {\textbf{Final SQL} $\hat{y}$};
+
+    % Phase 4c — Critic (positioned to the right)
+    \node (critic) [phase, fill=critic_fill, draw=critic_border,
+                    right=3cm of sandbox]
+        {\textbf{Phase 4c: Resilient Critic} \\ \scriptsize \texttt{gemini-2.5-flash}};
+
+    % ── ARROWS ──────────────────────────────────────────────────────────
+
+    \draw [arrow] (input)   -- node[label, right] {} (chess);
+    \draw [arrow] (chess)   -- node[label, right] {$\mathcal{S}' \subseteq \mathcal{S}$} (mci);
+    \draw [arrow] (mci)     -- node[label, right] {$\mathbf{C}_{\text{meta}}$} (asm);
+    \draw [arrow] (asm)     -- node[label, right] {$P_{\text{enriched}}$} (gen);
+    \draw [arrow] (gen)     -- node[label, right] {$y_0$} (reflect);
+    \draw [arrow] (reflect) -- node[label, right] {\textcolor{gen_border}{\textsc{ok}}} (sandbox);
+    \draw [arrow] (sandbox) -- node[label, right] {\textsc{pass}} (output);
+
+    % Feedback: sandbox error → critic
+    \draw [feedback] (sandbox.east) -- node[label, above] {\scriptsize Syntax/Empty/Null err} (critic.west);
+    % Feedback: reflector logic error → critic
+    \draw [feedback] (reflect.east) -| node[label, above, near start] {\scriptsize Logic mismatch} (critic.north);
+
+    % Critic corrected SQL → re-validate
+    \draw [feedback] (critic.south) |- ++(0,-0.7) -| node[label, below, near start] {\scriptsize $y_{i+1}$} (sandbox.south);
+
+    % ── BACKGROUND GROUPS ───────────────────────────────────────────────
     \begin{scope}[on background layer]
-        \node[draw=offline_border, dashed, line width=1pt, fill=black!2, inner sep=15pt, 
-              rounded corners=10pt, fit=(indexer) (chess) (mci)] (offline_box) {};
-        \node[anchor=south west, font=\sffamily\bfseries\footnotesize, text=offline_border] 
-              at (offline_box.north west) {OFFLINE PRE-PROCESSING};
-              
-        \node[draw=black!30, dashed, line width=1pt, fill=black!2, inner sep=15pt, 
-              rounded corners=10pt, fit=(generator) (reflector) (critic)] (asym_box) {};
-        \node[anchor=north west, font=\sffamily\bfseries\footnotesize, text=black!60] 
-              at (asym_box.north west) {ASYMMETRIC LLM LOOP};
+        % Offline pre-processing box
+        \node[draw=chess_border!60, dashed, line width=0.8pt,
+              fill=chess_fill!15, inner sep=12pt,
+              rounded corners=8pt, fit=(chess)(mci)(asm)] (offline_box) {};
+        \node[anchor=south west, font=\sffamily\bfseries\scriptsize,
+              text=chess_border!80]
+              at (offline_box.north west) {OFFLINE PRE-PROCESSING (zero API cost)};
+
+        % Asymmetric LLM loop box
+        \node[draw=critic_border!40, dashed, line width=0.8pt,
+              fill=critic_fill!10, inner sep=12pt,
+              rounded corners=8pt, fit=(gen)(reflect)(sandbox)(critic)] (llm_box) {};
+        \node[anchor=north west, font=\sffamily\bfseries\scriptsize,
+              text=critic_border!70]
+              at (llm_box.north west) {ASYMMETRIC LLM LOOP ($\leq 3$ API calls)};
     \end{scope}
 
 \end{tikzpicture}

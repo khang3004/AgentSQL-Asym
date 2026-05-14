@@ -44,3 +44,11 @@ exp_result/
 skills-lock.json
 src/text2sql_agent/index/metadata.pkl
 src/text2sql_agent/index/schema_index.faiss
+
+# Bibliography auxiliary files (bibtex/biber)
+*.bbl
+*.bcf
+*.blg
+*-blx.aux
+*-blx.bib
+*.run.xml

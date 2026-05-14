@@ -1,0 +1,15 @@
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+
+We have presented AgentSQL, a scalable and resilient asymmetric multi-agent pipeline for Text-to-SQL generation on large-scale databases. The proposed architecture makes three principal contributions: (1)~a four-phase pipeline with strict cost invariants ($\leq 3$ API calls per question), integrating CHESS semantic pruning, MCI-SQL metadata enrichment, and MAGIC self-correction guidelines; (2)~a Reflector--Critic asymmetric loop that decouples logical validation from syntactical correction, enabling targeted error remediation; and (3)~a three-tier \texttt{SemanticErrorChecker} that classifies execution outcomes into actionable semantic states, eliminating the need for LLM-based error diagnosis.
+
+Preliminary evaluation on the BIRD Mini-Dev benchmark demonstrates 80\% Execution Accuracy with an average of 2.0 API calls per question, validating the cost-efficiency of the asymmetric model allocation strategy.
+
+\medskip
+\noindent\textbf{Future Directions.}
+\begin{itemize}
+    \item \textbf{Full BIRD Evaluation}: Scaling the evaluation to the complete BIRD benchmark (12,751 samples across 95 databases) to establish statistically significant comparisons against CHESS, MAC-SQL, and frontier-model baselines.
+    \item \textbf{MAGIC Checklist Expansion}: Extending the correction guidelines with patterns for window functions (\texttt{ROW\_NUMBER}, \texttt{LEAD/LAG}) and Common Table Expressions (CTEs), addressing the failure modes identified in Section~\ref{sec:experiments}.
+    \item \textbf{Fine-Tuned Reflector}: Replacing the general-purpose scout model with a compact, task-specific classifier fine-tuned on back-translation consistency pairs to reduce Reflector latency below 100\,ms.
+    \item \textbf{Streaming Index Updates}: Adapting the offline FAISS indexing mechanism for incremental schema updates, enabling real-time deployment on databases with evolving schemas.
+\end{itemize}

@@ -10,17 +10,16 @@
 % Import our customized styling module
 \usepackage{settings/hcmus_paper}
 
-% Import Bibliography management (using standard BibTeX for IEEE)
-% Note: You can switch to biblatex if you heavily prefer it over standard BibTeX
-\usepackage{cite}
-%\usepackage{bib/refer}
+% Import Bibliography management (using biblatex for APA style)
+\usepackage[style=apa, backend=biber]{biblatex}
+\addbibresource{bib/references.bib}
 
 \begin{document}
 
 % -----------------------------------------------------------------------------
 % METADATA (Title & Authors)
 % -----------------------------------------------------------------------------
-\title{Automated Workflows and Agentic AI: \\ A Prototypical Approach for Data Science Teams}
+\title{AgentSQL: A Scalable and Resilient Asymmetric LLM Pipeline \\ for Text-to-SQL Workflows}
 
 % Author block designed for a 4-person team
 \author{
@@ -37,11 +36,11 @@
 % -----------------------------------------------------------------------------
 \IEEEtitleabstractindextext{%
     \begin{abstract}
-        This document serves as a foundational prototype (a scaffolding) for collaborative scientific writing. By leveraging modular \LaTeX{} configurations and rigorous Git-based version control, we propose a standardized framework that mitigates merge conflicts and enhances team productivity. \todo{Rewrite abstract after the actual topic is finalized.}
+        Translating natural language into executable SQL (Text-to-SQL) on enterprise-scale databases remains challenging due to schema ambiguity, error-type conflation, and prohibitive LLM inference costs. We present AgentSQL, an asymmetric multi-agent pipeline that addresses these challenges through three key innovations: (1)~a four-phase architecture integrating CHESS-based FAISS semantic pruning, MCI-SQL metadata enrichment, and MAGIC self-correction guidelines with a strict cost invariant of at most three LLM API calls per question; (2)~a Reflector--Critic asymmetric loop that decouples lightweight logical validation (back-translation consistency) from high-reasoning syntactical correction, invoking the expensive Critic model only when errors are detected; and (3)~a three-tier Semantic State Evaluation layer that classifies execution outcomes into \textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult} states, each carrying actionable correction suggestions. A round-robin key-rotation mechanism with zero-sleep failover enables sustained throughput during batch evaluation. Preliminary experiments on the BIRD Mini-Dev benchmark demonstrate 80\% Execution Accuracy with an average of 2.0 API calls per question, validating the cost-efficiency of the asymmetric model allocation strategy.
     \end{abstract}
 
     \begin{IEEEkeywords}
-        Data Science, Workflow Automation, \LaTeX, Collaboration.
+        Text-to-SQL, Asymmetric Multi-Agent Systems, Large Language Models, Schema Pruning, BIRD Benchmark, Self-Correction.
     \end{IEEEkeywords}}
 
 \maketitle
@@ -51,28 +50,16 @@
 % -----------------------------------------------------------------------------
 % PAPER CONTENT (Modularized)
 % -----------------------------------------------------------------------------
-% As a Senior-level approach, keep the main file clean by \input-ing sections.
 
-
-\section{Introduction}
-% \input{sections/01_introduction}
-This is where the journey begins. For our \highlight{Scientific Research Method} course, establishing a robust workflow is pivotal. We define our initial dataset matrix as $\vect{X} \in \R^{n \times p}$, where each instance aims to maximize the expected outcome $\E[X]$.
-
-
-\section{Methodology}
-% \input{sections/02_methodology}
-\todo{Khang: Setup the AWS/Neon DB connection details here.}
-As shown in our prior work, the variance $\Var(X)$ must be minimized. The absolute error is denoted by $\abs{\hat{y} - y}$.
-
-
-\section{Conclusion}
-% \input{sections/99_conclusion}
-A seamless collaboration model significantly reduces technical debt.
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_methodology}
+\input{sections/04_experiments}
+\input{sections/05_conclusion}
 
 % -----------------------------------------------------------------------------
 % REFERENCES
 % -----------------------------------------------------------------------------
-\bibliographystyle{IEEEtran}
-\bibliography{bib/references}
+\printbibliography
 
 \end{document}
