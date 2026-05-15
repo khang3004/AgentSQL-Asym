@@ -9,8 +9,9 @@ We evaluate AgentSQL on the \highlight{BIRD Mini-Dev} benchmark \parencite{li_ca
 \subsubsection{Model Configuration}
 The asymmetric model allocation is as follows:
 \begin{itemize}
-    \item \textbf{Generator \& Reflector}: \texttt{meta-llama/llama-4-scout-17b-16e-instruct} via Groq API ($T = 0.0$, deterministic decoding).
-    \item \textbf{Resilient Critic}: \texttt{gemini-2.5-flash} via Google AI ($T = 0.0$).
+    \raggedright
+    \item \textbf{Generator \& Reflector}: Groq-hosted \texttt{llama-4-scout-17b} with deterministic decoding ($\tau = 0.0$).
+    \item \textbf{Resilient Critic}: Google AI \texttt{gemini-2.5-flash} with deterministic decoding ($\tau = 0.0$).
     \item \textbf{Embedding Model}: \texttt{BAAI/bge-small-en-v1.5} for CHESS query encoding.
     \item \textbf{CHESS Top-$k$}: $k = 3$ with oversampling factor $\times 10$.
 \end{itemize}
@@ -36,23 +37,23 @@ where $\tau_i = \tau_{Y_i} / \tau_{\hat{Y}_i}$ is the relative execution time an
 
 \subsection{Results}
 
-\begin{table}[h]
+\begin{table*}[t]
     \centering
     \caption{AgentSQL results scaled to the full $N=500$ BIRD Mini-Dev set.}
     \label{tab:results}
     \begin{tabular}{@{}lcccc@{}}
         \toprule
-        \textbf{Model / Configuration} & \textbf{EX (\%)} & \textbf{VES (\%)} & \textbf{Soft F1 (\%)} & \textbf{Latency (s)} \\
+        \textbf{Model / Configuration}    & \textbf{EX (\%)} & \textbf{VES (\%)} & \textbf{Soft F1 (\%)} & \textbf{Latency (s)} \\
         \midrule
-        Baseline (Zero-shot Llama-3)      & TBD & TBD & TBD & TBD \\
-        Baseline (Zero-shot Gemini-2.5)   & TBD & TBD & TBD & TBD \\
+        Baseline (Zero-shot Llama-3)      & TBD              & TBD               & TBD                   & TBD                  \\
+        Baseline (Zero-shot Gemini-2.5)   & TBD              & TBD               & TBD                   & TBD                  \\
         \midrule
-        AgentSQL (w/o Reflector Module)   & TBD & TBD & TBD & TBD \\
-        AgentSQL (w/o MCI-SQL Metadata)   & TBD & TBD & TBD & TBD \\
-        \textbf{AgentSQL (Full Pipeline)} & 80.0 & 72.5 & 80.0 & 70.5 \\
+        AgentSQL (w/o Reflector Module)   & TBD              & TBD               & TBD                   & TBD                  \\
+        AgentSQL (w/o MCI-SQL Metadata)   & TBD              & TBD               & TBD                   & TBD                  \\
+        \textbf{AgentSQL (Full Pipeline)} & 80.0             & 72.5              & 80.0                  & 70.5                 \\
         \bottomrule
     \end{tabular}
-\end{table}
+\end{table*}
 
 \subsection{Analysis}
 

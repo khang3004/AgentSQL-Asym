@@ -4,7 +4,7 @@
 \subsection{Problem Formulation}
 We formulate the Text-to-SQL task over a relational database $\mathcal{D} = (\mathcal{S}, \mathcal{V})$, where $\mathcal{S} = \{T_1, T_2, \ldots, T_M\}$ is the set of $M$ tables comprising the schema and $\mathcal{V}$ denotes the stored data values. Each table $T_j$ is characterised by its column set $\{c_{j,1}, \ldots, c_{j,|T_j|}\}$. Given a natural language question $Q$ and optional evidence hint $E$, the objective is to generate the optimal SQL query:
 \begin{equation}
-\label{eq:objective}
+    \label{eq:objective}
     \hat{y} = \arg\max_{y \in \mathcal{Y}} \; P_\theta\!\left(y \;\middle|\; Q, \mathcal{S}', \mathbf{C}_{\mathrm{meta}}, E\right)
 \end{equation}
 where $\mathcal{S}' \subseteq \mathcal{S}$ is the CHESS-pruned schema ($|\mathcal{S}'| = k \ll M$), $\mathbf{C}_{\mathrm{meta}}$ is the MCI metadata context, and $\theta$ denotes the LLM parameters.
@@ -26,7 +26,7 @@ As illustrated in Figure~\ref{fig:workflow}, the \texttt{MasterPipeline} orchest
 \subsection{Phase~1: CHESS Semantic Pruning}
 Given the question $Q$, we embed it using the BGE asymmetric query prefix and retrieve the Top-$k$ tables from a pre-built FAISS index \parencite{johnson2019faiss, xiao2024cpackpackedresourcesgeneral}:
 \begin{equation}
-\label{eq:chess}
+    \label{eq:chess}
     \mathcal{S}' = \operatorname{Top\text{-}k}_{T_j \in \mathcal{S}} \left\langle \mathbf{e}_Q, \; \mathbf{e}_{T_j} \right\rangle
 \end{equation}
 where $\mathbf{e}_Q = f_\theta(\texttt{``Represent this sentence: ''} \| Q)$ is the L2-normalised query embedding and $\mathbf{e}_{T_j}$ is the pre-computed table representation stored in the FAISS \texttt{IndexFlatIP}. The index is built \emph{once offline} by \texttt{build\_offline\_index.py}, encoding each table as a concatenation of its name, column names, and data-type declarations. This reduces the schema from $M$ tables to $k$ (default $k=3$), yielding a typical reduction ratio of 60--80\%.
@@ -44,7 +44,7 @@ The result is a compact JSON string $\mathbf{C}_{\mathrm{meta}}$ with zero white
 \subsection{Phase~3: Context Assembly}
 Phases~1 and~2 are fused into a single enriched prompt $P_{\mathrm{enriched}}$:
 \begin{equation}
-\label{eq:prompt}
+    \label{eq:prompt}
     P_{\mathrm{enriched}} = \texttt{DDL}(\mathcal{S}') \;\|\; \mathbf{C}_{\mathrm{meta}} \;\|\; \mathcal{G}_{\mathrm{MAGIC}} \;\|\; Q \;\|\; E
 \end{equation}
 where $\mathcal{G}_{\mathrm{MAGIC}}$ is an 8-rule MAGIC self-correction checklist \parencite{askari_magic_2024} covering common failure modes: \texttt{LIMIT/ORDER~BY} misuse, aggregation granularity, ratio casting, date format mismatches, join path validation, projection minimality, and extreme-value patterns.
@@ -65,7 +65,7 @@ The generator prompt forces a mandatory \texttt{<thought>} reasoning block decla
 The same lightweight model $R$ performs a back-translation consistency check:
 \begin{equation}
     R(Q, y_0) = \begin{cases}
-        \texttt{<ok>}                     & \text{if SQL $\leftrightarrow$ NL consistent} \\
+        \texttt{<ok>}                            & \text{if SQL $\leftrightarrow$ NL consistent} \\
         \texttt{<error>}~\delta_{\mathrm{logic}} & \text{otherwise}
     \end{cases}
 \end{equation}
@@ -78,16 +78,18 @@ If the Reflector approves, the SQL is executed locally by the \texttt{SemanticEr
     \centering
     \caption{Three-tier Semantic State Evaluation taxonomy.}
     \label{tab:semantic_states}
-    \begin{tabular}{@{}lll@{}}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabularx}{\columnwidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
         \toprule
-        \textbf{State} & \textbf{Trigger} & \textbf{Suggestion Strategy} \\
+        \textbf{State}       & \textbf{Trigger}                  & \textbf{Suggestion Strategy}         \\
         \midrule
-        \textsc{SyntaxError}  & \texttt{sqlite3.OperationalError} & Fix column/table name \\
-        \textsc{EmptyResult}  & $|\mathrm{rows}| = 0$             & Use \texttt{LIKE} / \texttt{LOWER()} \\
-        \textsc{NullResult}   & $\forall$ cells $= \texttt{NULL}$ & Fix JOIN ON clause \\
-        \textsc{Valid}        & Non-empty, non-null rows          & Accept $\hat{y}$ \\
+        \textsc{SyntaxError} & SQLite \texttt{OperationalError}  & Fix column/table name                \\
+        \textsc{EmptyResult} & $|\mathrm{rows}| = 0$             & Use \texttt{LIKE} / \texttt{LOWER()} \\
+        \textsc{NullResult}  & $\forall$ cells $= \texttt{NULL}$ & Fix JOIN ON clause                   \\
+        \textsc{Valid}       & Non-empty, non-null rows          & Accept $\hat{y}$                     \\
         \bottomrule
-    \end{tabular}
+    \end{tabularx}
 \end{table}
 
 \subsubsection{Phase~4c: Resilient Critic}
