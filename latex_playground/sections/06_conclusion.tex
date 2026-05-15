@@ -1,0 +1,4 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented AgentSQL, a scalable and resilient asymmetric multi-agent pipeline for Text-to-SQL generation on large-scale databases. The proposed architecture makes three principal contributions: (1)~a four-phase pipeline with strict cost invariants ($\leq 3$ API calls per question), integrating CHESS semantic pruning, MCI-SQL metadata enrichment, and MAGIC self-correction guidelines; (2)~a Reflector--Critic asymmetric loop that decouples logical validation from syntactical correction, enabling targeted error remediation; and (3)~a three-tier \texttt{SemanticErrorChecker} that classifies execution outcomes into actionable semantic states, eliminating the need for LLM-based error diagnosis. Preliminary evaluation on the BIRD Mini-Dev benchmark validates the cost-efficiency and accuracy of the asymmetric model allocation strategy, showing substantial promise for complex enterprise workloads.

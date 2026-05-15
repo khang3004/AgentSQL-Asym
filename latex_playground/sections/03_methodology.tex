@@ -24,7 +24,7 @@ As illustrated in Figure~\ref{fig:workflow}, the \texttt{MasterPipeline} orchest
 \end{figure*}
 
 \subsection{Phase~1: CHESS Semantic Pruning}
-Given the question $Q$, we embed it using the BGE asymmetric query prefix and retrieve the Top-$k$ tables from a pre-built FAISS index \parencite{johnson2019faiss, xiao2024bge}:
+Given the question $Q$, we embed it using the BGE asymmetric query prefix and retrieve the Top-$k$ tables from a pre-built FAISS index \parencite{johnson2019faiss, xiao2024cpackpackedresourcesgeneral}:
 \begin{equation}
 \label{eq:chess}
     \mathcal{S}' = \operatorname{Top\text{-}k}_{T_j \in \mathcal{S}} \left\langle \mathbf{e}_Q, \; \mathbf{e}_{T_j} \right\rangle
@@ -47,7 +47,7 @@ Phases~1 and~2 are fused into a single enriched prompt $P_{\mathrm{enriched}}$:
 \label{eq:prompt}
     P_{\mathrm{enriched}} = \texttt{DDL}(\mathcal{S}') \;\|\; \mathbf{C}_{\mathrm{meta}} \;\|\; \mathcal{G}_{\mathrm{MAGIC}} \;\|\; Q \;\|\; E
 \end{equation}
-where $\mathcal{G}_{\mathrm{MAGIC}}$ is an 8-rule MAGIC self-correction checklist \parencite{gu2024magic} covering common failure modes: \texttt{LIMIT/ORDER~BY} misuse, aggregation granularity, ratio casting, date format mismatches, join path validation, projection minimality, and extreme-value patterns.
+where $\mathcal{G}_{\mathrm{MAGIC}}$ is an 8-rule MAGIC self-correction checklist \parencite{askari_magic_2024} covering common failure modes: \texttt{LIMIT/ORDER~BY} misuse, aggregation granularity, ratio casting, date format mismatches, join path validation, projection minimality, and extreme-value patterns.
 
 \subsection{Phase~4: Asymmetric LLM Loop}
 \label{subsec:asym_loop}
@@ -97,7 +97,7 @@ If \emph{any} error is detected (logical from Reflector or semantic from the che
 \end{equation}
 The corrected SQL is re-validated locally. The loop terminates when validation succeeds or the iteration budget $T_{\max} = 3$ is exhausted.
 
-\subsection{Resilient Infrastructure}
+\subsection{System-Level Optimizations for High-Throughput}
 Two engineering contributions underpin production reliability:
 \begin{itemize}
     \item \textbf{Round-Robin \texttt{KeyRotator}}: Manages $N$ API keys per provider (e.g., $N=4$ Groq keys). On HTTP~429, the system rotates to the next key with \emph{zero sleep}, achieving sustained throughput during batch evaluations.

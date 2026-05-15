@@ -19,16 +19,15 @@
 % -----------------------------------------------------------------------------
 % METADATA (Title & Authors)
 % -----------------------------------------------------------------------------
-\title{AgentSQL: A Scalable and Resilient Asymmetric LLM Pipeline \\ for Text-to-SQL Workflows}
+\title{\huge \textbf{AgentSQL: A Scalable and Resilient Asymmetric LLM Pipeline for Text-to-SQL Workflows}}
 
-% Author block designed for a 4-person team
+\date{}
+
+% --- AUTHOR BLOCK REFACTORED (GROUPED STYLE) ---
 \author{
-    Khang~DS, \textit{Member, HCMUS},
-    Author~Two, \textit{Member, HCMUS},\\
-    Author~Three, \textit{Member, HCMUS}, and
-    Author~Four, \textit{Member, HCMUS}%
-    \IEEEcompsocitemizethanks{\IEEEcompsocthanksitem All authors are with the Master of Data Science, University of Science, VNU-HCM, Ho Chi Minh City, Vietnam. \protect\\
-        E-mail: \{25C0103580, author2, author3, author4\}@student.hcmus.edu.vn}%
+    \IEEEauthorblockN{\textbf{Hoang-Khang Nguyen}, \textbf{Ngoc-Phuong-Dung Tran}, \textbf{Ha-Phuong Pham}, and \textbf{Quang-Khai Nguyen}}\\
+    \IEEEauthorblockA{\small Master of Data Science Program, University of Science, VNU-HCM, Vietnam\\
+        \textit{\{25c0103580, 25c0102837, 25c0104350, 25c0100785\}@student.hcmus.edu.vn}}
 }
 
 % -----------------------------------------------------------------------------
@@ -36,11 +35,11 @@
 % -----------------------------------------------------------------------------
 \IEEEtitleabstractindextext{%
     \begin{abstract}
-        Translating natural language into executable SQL (Text-to-SQL) on enterprise-scale databases remains challenging due to schema ambiguity, error-type conflation, and prohibitive LLM inference costs. We present AgentSQL, an asymmetric multi-agent pipeline that addresses these challenges through three key innovations: (1)~a four-phase architecture integrating CHESS-based FAISS semantic pruning, MCI-SQL metadata enrichment, and MAGIC self-correction guidelines with a strict cost invariant of at most three LLM API calls per question; (2)~a Reflector--Critic asymmetric loop that decouples lightweight logical validation (back-translation consistency) from high-reasoning syntactical correction, invoking the expensive Critic model only when errors are detected; and (3)~a three-tier Semantic State Evaluation layer that classifies execution outcomes into \textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult} states, each carrying actionable correction suggestions. A round-robin key-rotation mechanism with zero-sleep failover enables sustained throughput during batch evaluation. Preliminary experiments on the BIRD Mini-Dev benchmark demonstrate 80\% Execution Accuracy with an average of 2.0 API calls per question, validating the cost-efficiency of the asymmetric model allocation strategy.
+        Translating natural language into executable SQL (Text-to-SQL) on enterprise-scale databases remains challenging due to schema ambiguity, error-type conflation, and prohibitive LLM inference costs. We present AgentSQL, an asymmetric multi-agent pipeline that addresses these challenges through three key innovations: (1)~a four-phase architecture integrating CHESS-based FAISS semantic pruning, MCI-SQL metadata enrichment, and MAGIC self-correction guidelines with a strict cost invariant of at most three LLM API calls per question; (2)~a Reflector--Critic asymmetric loop that decouples lightweight logical validation (back-translation consistency) from high-reasoning syntactical correction, invoking the expensive Critic model only when errors are detected; and (3)~a three-tier Semantic State Evaluation layer that classifies execution outcomes into \textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult} states, each carrying actionable correction suggestions. A round-robin key-rotation mechanism with zero-sleep failover enables sustained throughput during batch evaluation. Preliminary experiments on the BIRD Mini-Dev benchmark demonstrate 80\% Execution Accuracy with an average of 2.0 API calls per question, validating the cost-efficiency of the asymmetric model allocation strategy. \par\vspace{0.5em}\noindent \textbf{\faGithub{} Source Code:} \url{https://github.com/khang3004/AgentSQL-Asym.git}
     \end{abstract}
 
     \begin{IEEEkeywords}
-        Text-to-SQL, Asymmetric Multi-Agent Systems, Large Language Models, Schema Pruning, BIRD Benchmark, Self-Correction.
+        Text-to-SQL, Large Language Models (LLMs), Multi-Agent Systems, Asymmetric Pipeline, Semantic Schema Pruning, Metadata Enrichment, Self-Correction Guidelines, BIRD Benchmark, Execution Accuracy, Resilient AI Infrastructure.
     \end{IEEEkeywords}}
 
 \maketitle
@@ -55,7 +54,9 @@
 \input{sections/02_related_work}
 \input{sections/03_methodology}
 \input{sections/04_experiments}
-\input{sections/05_conclusion}
+\input{sections/05_discussion}
+\input{sections/06_conclusion}
+\input{sections/07_future_work}
 
 % -----------------------------------------------------------------------------
 % REFERENCES

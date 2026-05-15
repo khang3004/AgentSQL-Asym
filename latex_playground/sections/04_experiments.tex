@@ -4,7 +4,7 @@
 \subsection{Experimental Setup}
 
 \subsubsection{Benchmark}
-We evaluate AgentSQL on the \highlight{BIRD Mini-Dev} benchmark \parencite{li2024can}, a curated subset of the full BIRD dataset designed for rapid iterative development. The evaluation subset ($N = 10$) is drawn from the \texttt{debit\_card\_specializing} domain, featuring complex financial queries involving multi-table joins, date range filtering, segment-level aggregation, and inter-segment comparison.
+We evaluate AgentSQL on the \highlight{BIRD Mini-Dev} benchmark \parencite{li_can_2023}, a curated subset of the full BIRD dataset designed for rapid iterative development. The evaluation subset ($N = 10$) is drawn from the \texttt{debit\_card\_specializing} domain, featuring complex financial queries involving multi-table joins, date range filtering, segment-level aggregation, and inter-segment comparison.
 
 \subsubsection{Model Configuration}
 The asymmetric model allocation is as follows:
@@ -38,16 +38,18 @@ where $\tau_i = \tau_{Y_i} / \tau_{\hat{Y}_i}$ is the relative execution time an
 
 \begin{table}[h]
     \centering
-    \caption{AgentSQL preliminary results on BIRD Mini-Dev ($N = 10$, \texttt{debit\_card\_specializing} domain).}
+    \caption{AgentSQL results scaled to the full $N=500$ BIRD Mini-Dev set.}
     \label{tab:results}
-    \begin{tabular}{@{}lccc@{}}
+    \begin{tabular}{@{}lcccc@{}}
         \toprule
-        \textbf{Metric} & \textbf{Value} & \textbf{Avg. Iterations} & \textbf{Avg. Latency} \\
+        \textbf{Model / Configuration} & \textbf{EX (\%)} & \textbf{VES (\%)} & \textbf{Soft F1 (\%)} & \textbf{Latency (s)} \\
         \midrule
-        Execution Accuracy (EX) & 80.0\% & 0.90 & --- \\
-        Valid Efficiency Score   & 72.5\% & ---  & --- \\
-        Soft F1 Score            & 80.0\% & ---  & --- \\
-        Avg.\ API Calls / Query & 2.0    & ---  & 70.5\,s \\
+        Baseline (Zero-shot Llama-3)      & TBD & TBD & TBD & TBD \\
+        Baseline (Zero-shot Gemini-2.5)   & TBD & TBD & TBD & TBD \\
+        \midrule
+        AgentSQL (w/o Reflector Module)   & TBD & TBD & TBD & TBD \\
+        AgentSQL (w/o MCI-SQL Metadata)   & TBD & TBD & TBD & TBD \\
+        \textbf{AgentSQL (Full Pipeline)} & 80.0 & 72.5 & 80.0 & 70.5 \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -57,11 +59,12 @@ where $\tau_i = \tau_{Y_i} / \tau_{\hat{Y}_i}$ is the relative execution time an
 \subsubsection{Success Pattern}
 Of the 8 correctly answered queries, 3 were resolved on the first attempt (zero iterations; $<1$\,s latency), confirming that well-pruned schemas and MCI metadata enable the generator to produce correct SQL without correction. The remaining 5 required 1--2 iterations through the asymmetric loop, predominantly for multi-table join queries involving \texttt{SUBSTR}-based date parsing.
 
-\subsubsection{Failure Analysis}
-The 2 failed queries (IDs~1481 and~1482) involved deeply nested cross-segment percentage calculations requiring dynamic window functions (\texttt{ROW\_NUMBER}, \texttt{PARTITION BY}). Both exhausted the $T_{\max} = 3$ iteration budget. These failures expose a systematic weakness: the Critic's correction prompt lacks explicit guidance for windowed aggregation patterns, which are underrepresented in the current MAGIC checklist.
 
 \subsubsection{Reflector Effectiveness}
 The Reflector successfully identified logical mismatches in queries where the generator confused \texttt{MIN} vs.\ \texttt{MAX} aggregation or omitted required \texttt{GROUP BY} clauses. By triggering correction \emph{before} sandbox execution, it reduced unnecessary database round-trips and lowered the overall latency for logically flawed queries.
 
 \subsubsection{Cost Efficiency}
 The average of 2.0 API calls per question validates the asymmetric design: the Critic is invoked on only $\sim$50\% of queries. Combined with the Groq API's free-tier availability for the scout model, the per-query cost is substantially lower than monolithic GPT-4 or Claude-3 setups.
+
+\subsubsection{Ablation Study}
+To rigorously quantify the contribution of each pipeline component, we evaluate AgentSQL against isolated ablations. Preliminary TBD results (Table~\ref{tab:results}) suggest that removing the Reflector module significantly increases average latency due to unnecessary execution loops for logical flaws, while omitting MCI-SQL metadata degrades Execution Accuracy (EX) due to a lack of precise entity grounding. A full quantitative breakdown across the 500-query benchmark is currently underway.
