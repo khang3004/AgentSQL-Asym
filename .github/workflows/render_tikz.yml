@@ -1,0 +1,62 @@
+name: Render TikZ Flowchart
+
+on:
+  push:
+    branches:
+      - main
+    # Only trigger the workflow if the specific TikZ source file is modified
+    paths:
+      - 'latex_playground/tikz_artifacts/agentsql_workflow.tex'
+
+# Explicitly grant write permissions so the GITHUB_TOKEN can push changes
+permissions:
+  contents: write
+
+jobs:
+  build_and_commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile LaTeX to PDF
+        # Use xu-cheng/latex-action@v3 as requested for reliable LaTeX compilation
+        uses: xu-cheng/latex-action@v3
+        with:
+          working_directory: latex_playground/tikz_artifacts
+          root_file: agentsql_workflow.tex
+
+      - name: Configure ImageMagick PDF Policy
+        run: |
+          # The default Ubuntu runner has ImageMagick installed, but its security policy
+          # often prevents reading/writing PDF files (Ghostscript vulnerability mitigation).
+          # We must modify policy.xml to grant read|write rights for the PDF pattern.
+          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
+
+      - name: Convert PDF to High-Quality PNG
+        working-directory: latex_playground/tikz_artifacts
+        run: |
+          # Use ImageMagick to convert the generated PDF to PNG.
+          # -density 300: High resolution (300 DPI) for professional clarity.
+          # -background white -alpha remove -alpha off: Replaces transparent background with solid white.
+          # -quality 100: Sets maximum compression quality for PNG.
+          convert -density 300 agentsql_workflow.pdf -background white -alpha remove -alpha off -quality 100 agentsql_workflow.png
+
+      - name: Auto-commit and Push PNG
+        run: |
+          # Configure Git credentials for the default GitHub Actions bot
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Stage the newly generated PNG file
+          git add latex_playground/tikz_artifacts/agentsql_workflow.png
+          
+          # Check if there are uncommitted changes (i.e. if the PNG actually changed)
+          # If it has changed, commit it with the "[skip ci]" flag to prevent infinite loops,
+          # then push the changes back to the repository using the default GITHUB_TOKEN.
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore(docs): auto-render TikZ flowchart to PNG [skip ci]"
+            git push
+          else
+            echo "No visual changes in the PNG detected. Skipping commit."
+          fi

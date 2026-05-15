@@ -56,27 +56,27 @@
 
     % Phase 1
     \node (chess) [phase, fill=chess_fill, draw=chess_border, below=1cm of input]
-        {\textbf{Phase 1: CHESS Pruning} \\ \scriptsize FAISS Top-$k$ retrieval};
+        {\textbf{Phase 1: CHESS Pruning} \\[4pt] \scriptsize FAISS Top-$k$ retrieval};
 
     % Phase 2
     \node (mci) [phase, fill=mci_fill, draw=mci_border, below=0.9cm of chess]
-        {\textbf{Phase 2: MCI-SQL Enrichment} \\ \scriptsize MIN/MAX, cardinality, samples};
+        {\textbf{Phase 2: MCI-SQL Enrichment} \\[4pt] \scriptsize MIN/MAX, cardinality, samples};
 
     % Phase 3
     \node (asm) [phase, fill=asm_fill, draw=asm_border, below=0.9cm of mci]
-        {\textbf{Phase 3: Context Assembly} \\ \scriptsize DDL + MCI JSON + MAGIC guidelines};
+        {\textbf{Phase 3: Context Assembly} \\[4pt] \scriptsize DDL + MCI JSON + MAGIC guidelines};
 
     % Phase 4a
     \node (gen) [phase, fill=gen_fill, draw=gen_border, below=0.9cm of asm]
-        {\textbf{Phase 4a: Generator} \\ \scriptsize \texttt{llama-4-scout-17b} via Groq};
+        {\textbf{Phase 4a: Generator} \\[4pt] \scriptsize \texttt{openai/gpt-oss-120b} via Groq};
 
     % Phase 4ab
     \node (reflect) [phase, fill=reflect_fill, draw=reflect_border, below=0.9cm of gen]
-        {\textbf{Phase 4ab: Reflector} \\ \scriptsize Back-translate SQL $\to$ English};
+        {\textbf{Phase 4ab: Reflector} \\[4pt] \scriptsize \texttt{meta-llama/llama-4-scout-17b}};
 
     % Phase 4b — Semantic Validation
     \node (sandbox) [decision, below=0.9cm of reflect]
-        {\scriptsize Semantic \\ \scriptsize Validation};
+        {\scriptsize Semantic \\[4pt] \scriptsize Validation};
 
     % Output
     \node (output) [io, below=0.9cm of sandbox] {\textbf{Final SQL} $\hat{y}$};
@@ -84,7 +84,7 @@
     % Phase 4c — Critic (positioned to the right)
     \node (critic) [phase, fill=critic_fill, draw=critic_border,
                     right=3cm of sandbox]
-        {\textbf{Phase 4c: Resilient Critic} \\ \scriptsize \texttt{gemini-2.5-flash}};
+        {\textbf{Phase 4c: Resilient Critic} \\[4pt] \scriptsize \texttt{openai/gpt-oss-20b}};
 
     % ── ARROWS ──────────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@
               rounded corners=8pt, fit=(chess)(mci)(asm)] (offline_box) {};
         \node[anchor=south west, font=\sffamily\bfseries\scriptsize,
               text=chess_border!80]
-              at (offline_box.north west) {OFFLINE PRE-PROCESSING (zero API cost)};
+              [yshift=4pt, xshift=4pt] at (offline_box.north west) {OFFLINE PRE-PROCESSING (zero API cost)};
 
         % Asymmetric LLM loop box
         \node[draw=critic_border!40, dashed, line width=0.8pt,
@@ -120,7 +120,7 @@
               rounded corners=8pt, fit=(gen)(reflect)(sandbox)(critic)] (llm_box) {};
         \node[anchor=north west, font=\sffamily\bfseries\scriptsize,
               text=critic_border!70]
-              at (llm_box.north west) {ASYMMETRIC LLM LOOP ($\leq 3$ API calls)};
+              [yshift=4pt, xshift=4pt] at (llm_box.north west) {ASYMMETRIC LLM LOOP ($\leq 3$ API calls)};
     \end{scope}
 
 \end{tikzpicture}
