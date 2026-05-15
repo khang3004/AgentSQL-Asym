@@ -7,6 +7,7 @@ on:
     # Only trigger the workflow if the specific TikZ source file is modified
     paths:
       - "latex_playground/tikz_artifacts/agentsql_workflow.tex"
+  workflow_dispatch: # Allow manual triggering for debugging
 
 # Explicitly grant write permissions so the GITHUB_TOKEN can push changes
 permissions:
