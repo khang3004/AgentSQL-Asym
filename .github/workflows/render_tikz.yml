@@ -6,7 +6,7 @@ on:
       - main
     # Only trigger the workflow if the specific TikZ source file is modified
     paths:
-      - 'latex_playground/tikz_artifacts/agentsql_workflow.tex'
+      - "latex_playground/tikz_artifacts/agentsql_workflow.tex"
 
 # Explicitly grant write permissions so the GITHUB_TOKEN can push changes
 permissions:
@@ -26,31 +26,29 @@ jobs:
           working_directory: latex_playground/tikz_artifacts
           root_file: agentsql_workflow.tex
 
-      - name: Configure ImageMagick PDF Policy
-        run: |
-          # The default Ubuntu runner has ImageMagick installed, but its security policy
-          # often prevents reading/writing PDF files (Ghostscript vulnerability mitigation).
-          # We must modify policy.xml to grant read|write rights for the PDF pattern.
-          sudo sed -i 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
-
-      - name: Convert PDF to High-Quality PNG
+      - name: Install PDF Render Tools & Convert to PNG
         working-directory: latex_playground/tikz_artifacts
         run: |
-          # Use ImageMagick to convert the generated PDF to PNG.
-          # -density 300: High resolution (300 DPI) for professional clarity.
-          # -background white -alpha remove -alpha off: Replaces transparent background with solid white.
-          # -quality 100: Sets maximum compression quality for PNG.
-          convert -density 300 agentsql_workflow.pdf -background white -alpha remove -alpha off -quality 100 agentsql_workflow.png
+          # 1. Install poppler-utils (lightweight and safer than ImageMagick)
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+
+          # 2. Convert PDF to PNG using pdftocairo
+          # -png: Output as PNG format (default background is white)
+          # -r 300: Set resolution to 300 DPI (ensures high quality for papers/theses)
+          # -singlefile: Output a static filename (no page number appended)
+          # Syntax: pdftocairo [options] <input.pdf> <output_prefix>
+          pdftocairo -png -r 300 -singlefile agentsql_workflow.pdf agentsql_workflow
 
       - name: Auto-commit and Push PNG
         run: |
           # Configure Git credentials for the default GitHub Actions bot
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           # Stage the newly generated PNG file
           git add latex_playground/tikz_artifacts/agentsql_workflow.png
-          
+
           # Check if there are uncommitted changes (i.e. if the PNG actually changed)
           # If it has changed, commit it with the "[skip ci]" flag to prevent infinite loops,
           # then push the changes back to the repository using the default GITHUB_TOKEN.
