@@ -182,10 +182,10 @@ class MasterPipeline:
         top_k: int = 3,
         embedding_model: str = "BAAI/bge-small-en-v1.5",
         index_dir: str = "src/text2sql_agent/index",
-        generator_provider: str = "groq",
-        generator_model: str = "meta-llama/llama-4-scout-17b-16e-instruct",
-        critic_provider: str = "google",
-        critic_model: str = "gemini-2.5-flash",
+        generator_provider: str | None = None,
+        generator_model: str | None = None,
+        critic_provider: str | None = None,
+        critic_model: str | None = None,
         sql_dialect: str = "SQLite",
     ) -> None:
         """Initialises all components with configurable hyperparameters.
@@ -203,23 +203,23 @@ class MasterPipeline:
                 ``python src/build_offline_index.py``.
             Defaults to ``"src/text2sql_agent/index"``.
             generator_provider (str): Provider for the generator LLM.
-                Defaults to ``"groq"``.
+                Defaults to reading ``GENERATOR_PROVIDER`` from env, then ``"groq"``.
             generator_model (str): Generator model identifier.
-                Defaults to ``"meta-llama/llama-4-scout-17b-16e-instruct"``.
+                Defaults to reading ``GENERATOR_MODEL`` from env, then ``"meta-llama/llama-4-scout-17b-16e-instruct"``.
             critic_provider (str): Provider for the critic LLM.
-                Defaults to ``"google"``.
+                Defaults to reading ``CRITIC_PROVIDER`` from env, then ``"google"``.
             critic_model (str): Critic model identifier.
-                Defaults to ``"gemini-2.5-flash"``.
+                Defaults to reading ``CRITIC_MODEL`` from env, then ``"gemini-2.5-flash"``.
             sql_dialect (str): SQL dialect label used in prompt templates.
                 Defaults to ``"SQLite"``.
         """
         self.top_k: int = top_k
         self.embedding_model: str = embedding_model
         self.index_dir: str = index_dir
-        self.generator_provider: str = generator_provider
-        self.generator_model: str = generator_model
-        self.critic_provider: str = critic_provider
-        self.critic_model: str = critic_model
+        self.generator_provider: str = generator_provider or os.getenv("GENERATOR_PROVIDER", "groq")
+        self.generator_model: str = generator_model or os.getenv("GENERATOR_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+        self.critic_provider: str = critic_provider or os.getenv("CRITIC_PROVIDER", "google")
+        self.critic_model: str = critic_model or os.getenv("CRITIC_MODEL", "gemini-2.5-flash")
         self.sql_dialect: str = sql_dialect
 
         # ChessLinker loads FAISS index + query model lazily on first prune().
@@ -235,10 +235,10 @@ class MasterPipeline:
             top_k,
             embedding_model,
             index_dir,
-            generator_provider,
-            generator_model,
-            critic_provider,
-            critic_model,
+            self.generator_provider,
+            self.generator_model,
+            self.critic_provider,
+            self.critic_model,
         )
 
     # ------------------------------------------------------------------
@@ -388,6 +388,7 @@ class MasterPipeline:
         llm = get_llm(
             role="generator",
             model_name=self.generator_model,
+            provider=self.generator_provider,
         )
         try:
             raw: str = llm.generate(enriched_prompt)
@@ -571,6 +572,7 @@ class MasterPipeline:
         llm = get_llm(
             role="critic",
             model_name=self.critic_model,
+            provider=self.critic_provider,
         )
         try:
             raw: str = llm.generate(correction_prompt)
@@ -752,6 +754,8 @@ class MasterPipeline:
 
 if __name__ == "__main__":
     import argparse
+    from dotenv import load_dotenv
+    load_dotenv()
 
     logging.basicConfig(
         level=logging.INFO,

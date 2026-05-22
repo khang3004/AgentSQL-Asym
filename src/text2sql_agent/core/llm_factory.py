@@ -122,12 +122,13 @@ class KeyManager:
         self._tries = 0
 
 
-# Singleton key managers – shared across all GroqLLM instances
+# Singleton key managers – shared across all LLM instances
 groq_key_manager = KeyManager("GROQ_API_KEY")
+gemini_key_manager = KeyManager("GEMINI_API_KEY")
 
 
 # ---------------------------------------------------------------------------
-# Base Groq HTTP caller
+# Base Groq & Gemini HTTP callers
 # ---------------------------------------------------------------------------
 
 _GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -177,8 +178,64 @@ def _call_groq(model_name: str, prompt: str, api_key: str, max_tokens: int = 204
     return response.json()["choices"][0]["message"]["content"]
 
 
+def _call_gemini(model_name: str, prompt: str, api_key: str, max_tokens: int = 2048, temperature: float = 0.0) -> str:
+    """Low-level native Google Gemini REST call. Raises ``RateLimitError`` on 429.
+
+    Args:
+        model_name: Gemini model identifier.
+        prompt: User prompt string.
+        api_key: Gemini API key to use.
+        max_tokens: Maximum tokens to generate.
+        temperature: Sampling temperature (0.0 = deterministic).
+
+    Raises:
+        RateLimitError: On HTTP 429.
+        httpx.HTTPStatusError: On any other HTTP error.
+
+    Returns:
+        The generated text content.
+    """
+    clean_model = model_name.split("/")[-1]
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model}:generateContent?key={api_key}"
+    headers = {
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens
+        }
+    }
+    with httpx.Client(timeout=60.0) as client:
+        response = client.post(url, headers=headers, json=payload)
+
+    if response.status_code == 429:
+        logger.warning("[Gemini] HTTP 429 on model=%s key_idx=%d. Rotating key.", model_name, gemini_key_manager._idx)
+        raise RateLimitError(f"Gemini 429 on model {model_name}")
+
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError:
+        logger.error("[Gemini] HTTP error %d: %s", response.status_code, response.text[:400])
+        raise
+
+    try:
+        data = response.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError) as e:
+        logger.error("[Gemini] Unexpected response format: %s", response.text[:400])
+        raise RuntimeError("Failed to parse Gemini API response") from e
+
+
 # ---------------------------------------------------------------------------
-# GroqLLM — single model, key-rotation on 429, no sleep between retries
+# LLM Providers (Groq & Gemini)
 # ---------------------------------------------------------------------------
 
 class GroqLLM:
@@ -233,8 +290,60 @@ class GroqLLM:
         ) from last_error
 
 
+class GeminiLLM:
+    """Wrapper for a single Gemini model with instant key rotation on 429.
+
+    Retries up to ``len(keys)`` times with *zero* sleep between each attempt.
+    Each retry calls ``gemini_key_manager.rotate()`` before the next attempt so
+    a fresh key is always used.  If all keys are exhausted the
+    ``AllKeysExhaustedError`` propagates upward.
+    """
+
+    def __init__(self, model_name: str, max_tokens: int = 2048) -> None:
+        self.model_name = model_name
+        self.max_tokens = max_tokens
+
+    @traceable(run_type="llm")
+    def generate(self, prompt: str) -> str:
+        """Generate text.  Rotates key immediately on 429, raises after all exhausted.
+
+        Args:
+            prompt: Input prompt.
+
+        Raises:
+            AllKeysExhaustedError: When every key has returned 429.
+            Exception: On non-rate-limit errors.
+
+        Returns:
+            Generated text string.
+        """
+        if not gemini_key_manager.keys:
+            raise RuntimeError("No GEMINI_API_KEY_* entries found in environment.")
+
+        gemini_key_manager.reset_tries()
+        last_error: Exception | None = None
+
+        # Try every key in the pool exactly once per call
+        for attempt in range(gemini_key_manager.total_keys):
+            api_key = gemini_key_manager.current_key()
+            try:
+                result = _call_gemini(self.model_name, prompt, api_key, self.max_tokens)
+                gemini_key_manager.reset_tries()
+                return result
+            except RateLimitError as e:
+                last_error = e
+                gemini_key_manager.rotate()
+                logger.info("[GeminiLLM] Attempt %d/%d exhausted – trying next key.", attempt + 1, gemini_key_manager.total_keys)
+            except Exception:
+                raise  # Non-rate-limit errors bubble up immediately
+
+        raise AllKeysExhaustedError(
+            f"All {gemini_key_manager.total_keys} Gemini keys returned 429 for model '{self.model_name}'."
+        ) from last_error
+
+
 # ---------------------------------------------------------------------------
-# ResilientGroqLLM — primary model with scout fallback
+# Resilient Wrappers (Primary with Fallback)
 # ---------------------------------------------------------------------------
 
 _FALLBACK_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
@@ -276,17 +385,54 @@ class ResilientGroqLLM:
             return self.fallback_llm.generate(prompt)
 
 
+class ResilientGeminiLLM:
+    """Two-tier Gemini wrapper: primary model → flash fallback on full key exhaustion.
+
+    When all Gemini keys fail on the primary model (``AllKeysExhaustedError``),
+    falls back to ``gemini-2.5-flash`` which is a lighter, more available model
+    on the same keys.
+    """
+
+    def __init__(self, primary_model: str, max_tokens: int = 2048) -> None:
+        self.primary_llm = GeminiLLM(primary_model, max_tokens)
+        self.fallback_llm = GeminiLLM("gemini-2.5-flash", max_tokens)
+        self.primary_model = primary_model
+
+    @traceable(run_type="llm")
+    def generate(self, prompt: str) -> str:
+        """Generate text, transparently degrading to flash on key exhaustion.
+
+        Args:
+            prompt: Input prompt.
+
+        Returns:
+            Generated text string.
+        """
+        try:
+            return self.primary_llm.generate(prompt)
+        except AllKeysExhaustedError as e:
+            logger.warning(
+                "[ResilientGeminiLLM] All keys exhausted for primary model '%s': %s. "
+                "Gracefully degrading to fallback model 'gemini-2.5-flash'.",
+                self.primary_model,
+                e,
+            )
+            return self.fallback_llm.generate(prompt)
+
+
 # ---------------------------------------------------------------------------
 # Public factory function
 # ---------------------------------------------------------------------------
 
-def get_llm(role: str, model_name: str | None = None) -> LLMInterface:
+def get_llm(role: str, model_name: str | None = None, provider: str | None = None) -> LLMInterface:
     """Dependency-injection factory for LLM instances.
 
     Args:
         role: Pipeline role – ``'generator'`` or ``'corrector'`` (or ``'critic'``
               as a legacy alias for corrector).
         model_name: Override the default model for the role.
+        provider: Provider name (``'groq'`` or ``'google'``). If not set, it is
+                  inferred from model name or environment.
 
     Raises:
         ValueError: If an unrecognised role is passed.
@@ -312,5 +458,23 @@ def get_llm(role: str, model_name: str | None = None) -> LLMInterface:
     default_model, default_max_tokens = _DEFAULTS[role_lower]
     resolved_model = model_name or default_model
 
-    logger.info("[LLMFactory] Initialising role='%s' model='%s' (Groq)", role, resolved_model)
-    return ResilientGroqLLM(primary_model=resolved_model, max_tokens=default_max_tokens)
+    # Determine provider
+    resolved_provider = provider
+    if not resolved_provider:
+        if resolved_model and ("gemini" in resolved_model.lower() or "google" in resolved_model.lower()):
+            resolved_provider = "google"
+        elif role_lower == "generator":
+            resolved_provider = os.environ.get("GENERATOR_PROVIDER", "groq")
+        elif role_lower in ("critic", "corrector"):
+            resolved_provider = os.environ.get("CRITIC_PROVIDER", "google" if "gemini" in resolved_model.lower() else "groq")
+        else:
+            resolved_provider = "groq"
+
+    resolved_provider = resolved_provider.lower()
+
+    if resolved_provider in ("google", "gemini"):
+        logger.info("[LLMFactory] Initialising role='%s' model='%s' (Gemini)", role, resolved_model)
+        return ResilientGeminiLLM(primary_model=resolved_model, max_tokens=default_max_tokens)
+    else:
+        logger.info("[LLMFactory] Initialising role='%s' model='%s' (Groq)", role, resolved_model)
+        return ResilientGroqLLM(primary_model=resolved_model, max_tokens=default_max_tokens)
