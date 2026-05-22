@@ -106,7 +106,7 @@ def evaluate_master_pipeline(dataset: list, db_root: str, ves_iters: int = 5, to
         with open(results_file, "w") as f:
             json.dump(results_log, f, indent=4)
             
-    num_samples = len(dataset)
+    num_samples = len(results_log)
     ex = (correct_ex / num_samples * 100) if num_samples else 0
     ves = (total_ves_reward / num_samples) if num_samples else 0
     soft_f1 = (total_f1 / num_samples * 100) if num_samples else 0

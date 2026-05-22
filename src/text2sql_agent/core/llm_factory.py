@@ -346,25 +346,72 @@ class GeminiLLM:
 # Resilient Wrappers (Primary with Fallback)
 # ---------------------------------------------------------------------------
 
-_FALLBACK_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+def get_fallback_models() -> list[str]:
+    """Helper to dynamically resolve the fallback model list.
+
+    1. First priority: os.getenv("FALLBACK_MODEL") (comma-separated list)
+    2. Second priority: default to ["google/gemma-4-31b", "meta-llama/llama-4-scout-17b-16e-instruct"]
+    """
+    env_fallback = os.getenv("FALLBACK_MODEL")
+    if env_fallback:
+        models = [m.strip() for m in env_fallback.split(",") if m.strip()]
+        if models:
+            return models
+    return ["google/gemma-4-31b", "meta-llama/llama-4-scout-17b-16e-instruct"]
+
+
+def get_fallback_providers() -> list[str]:
+    """Helper to dynamically resolve the fallback provider list.
+
+    1. First priority: os.getenv("FALLBACK_PROVIDER") (comma-separated list)
+    2. Second priority: empty list (will auto-infer from model names)
+    """
+    env_provider = os.getenv("FALLBACK_PROVIDER")
+    if env_provider:
+        providers = [p.strip().lower() for p in env_provider.split(",") if p.strip()]
+        if providers:
+            return providers
+    return []
+
+
+def get_fallback_model() -> str:
+    """Helper to dynamically resolve the fallback model name (returns the first one)."""
+    models = get_fallback_models()
+    return models[0] if models else "google/gemma-4-31b"
+
+
+def create_base_llm(model_name: str, max_tokens: int = 2048, provider: str | None = None) -> LLMInterface:
+    """Helper to instantiate the correct base LLM (Groq or Gemini) based on model name or explicit provider."""
+    resolved_provider = provider
+    if not resolved_provider:
+        model_lower = model_name.lower()
+        if "gemini" in model_lower or "google" in model_lower or "gemma" in model_lower:
+            resolved_provider = "google"
+        else:
+            resolved_provider = "groq"
+            
+    resolved_provider = resolved_provider.lower()
+    if resolved_provider in ("google", "gemini"):
+        return GeminiLLM(model_name, max_tokens)
+    else:
+        return GroqLLM(model_name, max_tokens)
 
 
 class ResilientGroqLLM:
-    """Two-tier Groq wrapper: primary model → scout fallback on full key exhaustion.
+    """Two-tier Groq wrapper: primary model -> dynamic fallback list on full key exhaustion.
 
     When all Groq keys fail on the primary model (``AllKeysExhaustedError``),
-    falls back to ``meta-llama/llama-4-scout-17b-16e-instruct`` which is a
-    lighter, more available model on the same keys.
+    falls back sequentially through the configured fallback models.
     """
 
     def __init__(self, primary_model: str, max_tokens: int = 2048) -> None:
         self.primary_llm = GroqLLM(primary_model, max_tokens)
-        self.fallback_llm = GroqLLM(_FALLBACK_MODEL, max_tokens)
         self.primary_model = primary_model
+        self.max_tokens = max_tokens
 
     @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
-        """Generate text, transparently degrading to scout on key exhaustion.
+        """Generate text, transparently degrading to fallback on key exhaustion.
 
         Args:
             prompt: Input prompt.
@@ -375,32 +422,63 @@ class ResilientGroqLLM:
         try:
             return self.primary_llm.generate(prompt)
         except AllKeysExhaustedError as e:
+            fallback_models = get_fallback_models()
+            fallback_providers = get_fallback_providers()
             logger.warning(
                 "[ResilientGroqLLM] All keys exhausted for primary model '%s': %s. "
-                "Gracefully degrading to fallback model '%s'.",
+                "Starting fallback chain: %s with providers %s",
                 self.primary_model,
                 e,
-                _FALLBACK_MODEL,
+                fallback_models,
+                fallback_providers,
             )
-            return self.fallback_llm.generate(prompt)
+            
+            last_err = e
+            for i, model_name in enumerate(fallback_models):
+                if model_name == self.primary_model:
+                    continue
+                # Determine provider for this fallback model
+                provider = None
+                if i < len(fallback_providers):
+                    provider = fallback_providers[i]
+                try:
+                    logger.info("[ResilientGroqLLM] Trying fallback model '%s' with provider '%s'...", model_name, provider or "auto-infer")
+                    fallback_llm = create_base_llm(model_name, self.max_tokens, provider)
+                    return fallback_llm.generate(prompt)
+                except AllKeysExhaustedError as fe:
+                    logger.warning(
+                        "[ResilientGroqLLM] Fallback model '%s' also failed with key exhaustion: %s",
+                        model_name,
+                        fe,
+                    )
+                    last_err = fe
+                except Exception as ex:
+                    logger.error(
+                        "[ResilientGroqLLM] Fallback model '%s' failed with unexpected error: %s",
+                        model_name,
+                        ex,
+                    )
+                    raise ex
+            raise AllKeysExhaustedError(
+                f"All primary and fallback models exhausted for primary model '{self.primary_model}'."
+            ) from last_err
 
 
 class ResilientGeminiLLM:
-    """Two-tier Gemini wrapper: primary model → flash fallback on full key exhaustion.
+    """Two-tier Gemini wrapper: primary model -> dynamic fallback list on full key exhaustion.
 
     When all Gemini keys fail on the primary model (``AllKeysExhaustedError``),
-    falls back to ``gemini-2.5-flash`` which is a lighter, more available model
-    on the same keys.
+    falls back sequentially through the configured fallback models.
     """
 
     def __init__(self, primary_model: str, max_tokens: int = 2048) -> None:
         self.primary_llm = GeminiLLM(primary_model, max_tokens)
-        self.fallback_llm = GeminiLLM("gemini-2.5-flash", max_tokens)
         self.primary_model = primary_model
+        self.max_tokens = max_tokens
 
     @traceable(run_type="llm")
     def generate(self, prompt: str) -> str:
-        """Generate text, transparently degrading to flash on key exhaustion.
+        """Generate text, transparently degrading to fallback on key exhaustion.
 
         Args:
             prompt: Input prompt.
@@ -411,13 +489,46 @@ class ResilientGeminiLLM:
         try:
             return self.primary_llm.generate(prompt)
         except AllKeysExhaustedError as e:
+            fallback_models = get_fallback_models()
+            fallback_providers = get_fallback_providers()
             logger.warning(
                 "[ResilientGeminiLLM] All keys exhausted for primary model '%s': %s. "
-                "Gracefully degrading to fallback model 'gemini-2.5-flash'.",
+                "Starting fallback chain: %s with providers %s",
                 self.primary_model,
                 e,
+                fallback_models,
+                fallback_providers,
             )
-            return self.fallback_llm.generate(prompt)
+            
+            last_err = e
+            for i, model_name in enumerate(fallback_models):
+                if model_name == self.primary_model:
+                    continue
+                # Determine provider for this fallback model
+                provider = None
+                if i < len(fallback_providers):
+                    provider = fallback_providers[i]
+                try:
+                    logger.info("[ResilientGeminiLLM] Trying fallback model '%s' with provider '%s'...", model_name, provider or "auto-infer")
+                    fallback_llm = create_base_llm(model_name, self.max_tokens, provider)
+                    return fallback_llm.generate(prompt)
+                except AllKeysExhaustedError as fe:
+                    logger.warning(
+                        "[ResilientGeminiLLM] Fallback model '%s' also failed with key exhaustion: %s",
+                        model_name,
+                        fe,
+                    )
+                    last_err = fe
+                except Exception as ex:
+                    logger.error(
+                        "[ResilientGeminiLLM] Fallback model '%s' failed with unexpected error: %s",
+                        model_name,
+                        ex,
+                    )
+                    raise ex
+            raise AllKeysExhaustedError(
+                f"All primary and fallback models exhausted for primary model '{self.primary_model}'."
+            ) from last_err
 
 
 # ---------------------------------------------------------------------------
@@ -461,12 +572,12 @@ def get_llm(role: str, model_name: str | None = None, provider: str | None = Non
     # Determine provider
     resolved_provider = provider
     if not resolved_provider:
-        if resolved_model and ("gemini" in resolved_model.lower() or "google" in resolved_model.lower()):
+        if resolved_model and ("gemini" in resolved_model.lower() or "google" in resolved_model.lower() or "gemma" in resolved_model.lower()):
             resolved_provider = "google"
         elif role_lower == "generator":
             resolved_provider = os.environ.get("GENERATOR_PROVIDER", "groq")
         elif role_lower in ("critic", "corrector"):
-            resolved_provider = os.environ.get("CRITIC_PROVIDER", "google" if "gemini" in resolved_model.lower() else "groq")
+            resolved_provider = os.environ.get("CRITIC_PROVIDER", "google" if ("gemini" in resolved_model.lower() or "gemma" in resolved_model.lower()) else "groq")
         else:
             resolved_provider = "groq"
 
