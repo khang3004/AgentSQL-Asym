@@ -1,9 +1,9 @@
-.PHONY: setup build up down shell clean pull-data build-index smoke eval-langgraph eval-master compare-sota run-pipeline sync-deps
+.PHONY: setup build up down shell clean pull-data build-index smoke eval run-pipeline sync-deps
 
 -include .env
 export
 
-NUM_SAMPLES ?= 5
+NUM_SAMPLES ?= 20
 QUESTION ?= What is the ratio of customers who pay in EUR against customers who pay in CZK?
 DB_PATH ?= data_minidev/MINIDEV/dev_databases/debit_card_specializing/debit_card_specializing.sqlite
 
@@ -51,13 +51,6 @@ sync-deps:
 smoke: sync-deps
 	$(DOCKER_EXEC) python3 src/smoke_test_agent.py
 
-eval-master: sync-deps
-	@echo "MasterPipeline (CHESS+MCI+MAGIC) | Generator: $(GENERATOR_PROVIDER)/$(GENERATOR_MODEL) | Critic: $(CRITIC_PROVIDER)/$(CRITIC_MODEL)"
-	$(DOCKER_EXEC) python3 research/evaluator_master.py \
-		--num_samples $(NUM_SAMPLES) \
-		--top_k 3 \
-		$(if $(filter true,$(FORCE_RESTART)),--force-restart)
-
 # -------- Offline index (run once before MasterPipeline) --------
 TABLES_JSON ?= data_minidev/MINIDEV/dev_tables.json
 DB_ROOT     ?= data_minidev/MINIDEV/dev_databases
@@ -72,11 +65,14 @@ build-index: sync-deps
 		--model $(BGE_MODEL)
 
 run-pipeline: sync-deps
-	$(DOCKER_EXEC) python3 src/text2sql_agent/tools/master_pipeline.py \
+	$(DOCKER_EXEC) python3 src/text2sql_agent/tools/sequential_pipeline.py \
 		--question "$(QUESTION)" \
 		--db_path "$(DB_PATH)" \
 		--top_k 3
 
+eval: sync-deps
+	@echo "AgentSQL LangGraph (SOTA) | Generator: $(GENERATOR_PROVIDER)/$(GENERATOR_MODEL) | Critic: $(CRITIC_PROVIDER)/$(CRITIC_MODEL)"
+	$(DOCKER_EXEC) python3 research/benchmark_eval.py --num_samples $(NUM_SAMPLES)
 # -------- CLEANUP --------
 clean:
 	rm -rf .venv

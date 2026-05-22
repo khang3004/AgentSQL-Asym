@@ -22,7 +22,7 @@
                 line width=0.8pt, blur shadow={shadow blur steps=4}
             },
         decision/.style={
-                diamond, aspect=2.5, minimum width=2.8cm,
+                diamond, aspect=2.5, minimum width=3.2cm,
                 inner sep=1pt, text centered, draw=sandbox_border, fill=sandbox_fill,
                 line width=0.8pt, blur shadow={shadow blur steps=4}
             },
@@ -49,107 +49,89 @@
     \definecolor{io_fill}{RGB}{255, 248, 225}
     \definecolor{io_border}{RGB}{255, 160, 0}
 
-    % ── ANCHOR NODE for absolute positioning ────────────────────────────
-    % We place all phase nodes manually via absolute y-coords to give
-    % full control over vertical spacing for labels.
+    % ── LangGraph Asymmetric State Machine Nodes ────────────────────────
 
     % Input (row 0)
-    \node (input) [io] {\textbf{NL Question} $Q$};
+    \node (input) [io] {\textbf{NL Question} $Q$ and Schema $\mathcal{S}$};
 
-    % Phase 1 (row 1) — 1.4cm below input
-    \node (chess) [phase, fill=chess_fill, draw=chess_border, below=1.4cm of input]
-    {\textbf{Phase 1: CHESS Pruning} \\[4pt] \scriptsize FAISS Top-$k$ retrieval};
+    % Node 1: Adaptive Router Node (row 1)
+    \node (router) [phase, fill=chess_fill, draw=chess_border, below=1.3cm of input]
+    {\textbf{Node 1: Adaptive Router} \\[4pt] \scriptsize \texttt{openai/gpt-oss-20b} via Groq};
 
-    % Phase 2 (row 2)
-    \node (mci) [phase, fill=mci_fill, draw=mci_border, below=0.9cm of chess]
-    {\textbf{Phase 2: MCI-SQL Enrichment} \\[4pt] \scriptsize MIN/MAX, cardinality, samples};
+    % Node 2: Schema Explorer Node (row 2) - only for COMPLEX
+    \node (explorer) [phase, fill=mci_fill, draw=mci_border, below=1.2cm of router]
+    {\textbf{Node 2: Schema Explorer} \\[4pt] \scriptsize CHESS Semantic Pruning + MCI Card/Range Profiling};
 
-    % Phase 3 (row 3)
-    \node (asm) [phase, fill=asm_fill, draw=asm_border, below=0.9cm of mci]
-    {\textbf{Phase 3: Context Assembly} \\[4pt] \scriptsize DDL + MCI JSON + MAGIC guidelines};
+    % Node 3: SQL Generator Node (row 3)
+    \node (gen) [phase, fill=gen_fill, draw=gen_border, below=1.4cm of explorer]
+    {\textbf{Node 3: SQL Generator} \\[4pt] \scriptsize Dual Candidate (DDL vs Markdown) + Sandbox Selection};
 
-    % ── GAP between offline box and LLM loop box ──────────────────────
-    % 2.6cm vertical gap: enough room for (a) offline_box bottom border,
-    % (b) the "ASYMMETRIC LLM LOOP" label sitting above llm_box's top border,
-    % (c) the P_enriched arrow label, and (d) llm_box top border itself.
-    \node (gen) [phase, fill=gen_fill, draw=gen_border, below=2.6cm of asm]
-    {\textbf{Phase 4a: Generator} \\[4pt] \scriptsize \texttt{openai/gpt-oss-120b} via Groq};
+    % Node 4: Resilient SQL Validator Node (row 4)
+    \node (validator) [decision, below=1.1cm of gen]
+    {\scriptsize Node 4: Resilient \\[2pt] \scriptsize SQL Validator};
 
-    % Phase 4ab
-    \node (reflect) [phase, fill=reflect_fill, draw=reflect_border, below=0.9cm of gen]
-    {\textbf{Phase 4ab: Reflector} \\[4pt] \scriptsize \texttt{meta-llama/llama-4-scout-17b}};
+    % Node 5: Output Aligner Node (row 5)
+    \node (aligner) [phase, fill=reflect_fill, draw=reflect_border, below=1.1cm of validator]
+    {\textbf{Node 5: Output Aligner} \\[4pt] \scriptsize Column name \& standard case alignment};
 
-    % Semantic Validation diamond
-    \node (sandbox) [decision, below=0.9cm of reflect]
-    {\scriptsize Semantic \\[2pt] \scriptsize Validation};
+    % Output (row 6)
+    \node (output) [io, below=1.1cm of aligner] {\textbf{Final SQL} $\hat{y}$};
 
-    % Output — below sandbox
-    \node (output) [io, below=1.1cm of sandbox] {\textbf{Final SQL} $\hat{y}$};
+    % Node 6: Targeted Resilient Corrector Node (right of validator)
+    \node (corrector) [phase, fill=critic_fill, draw=critic_border, right=3.2cm of validator]
+    {\textbf{Node 6: Targeted Corrector} \\[4pt] \scriptsize \texttt{openai/gpt-oss-120b} via Groq};
 
-    % Critic — to the right of sandbox
-    \node (critic) [phase, fill=critic_fill, draw=critic_border,
-        right=3cm of sandbox]
-    {\textbf{Phase 4c: Resilient Critic} \\[4pt] \scriptsize \texttt{openai/gpt-oss-20b}};
+    % ── ARROWS & ROUTING ────────────────────────────────────────────────
 
-    % ── ARROWS ──────────────────────────────────────────────────────────
+    \draw [arrow] (input)   -- node[label, right] {} (router);
+    
+    % Router branch 1: COMPLEX (goes straight through Schema Explorer)
+    \draw [arrow] (router)   -- node[label, right] {\textsc{COMPLEX}} (explorer);
+    \draw [arrow] (explorer) -- node[label, right] {$\mathcal{S}'_{\mathrm{enriched}}$} (gen);
+    
+    % Router branch 2: SIMPLE (bypasses Schema Explorer on the right/left side)
+    % We draw a curved arrow on the left to bypass Node 2 cleanly.
+    \draw [arrow] (router.west) to [out=185, in=175, looseness=1.2] 
+        node[label, left, midway, xshift=-2pt] {\textsc{SIMPLE} (bypass)} 
+        (gen.west);
 
-    \draw [arrow] (input)   -- node[label, right] {} (chess);
-    \draw [arrow] (chess)   -- node[label, right] {$\mathcal{S}' \subseteq \mathcal{S}$} (mci);
-    \draw [arrow] (mci)     -- node[label, right] {$\mathbf{C}_{\text{meta}}$} (asm);
-    % P_enriched label — this arrow crosses the inter-box gap, label goes on right side
-    \draw [arrow] (asm)     -- node[label, right] {$P_{\text{enriched}}$} (gen);
-    \draw [arrow] (gen)     -- node[label, right] {$y_0$} (reflect);
-    \draw [arrow] (reflect) -- node[label, right] {\textcolor{gen_border}{\textsc{ok}}} (sandbox);
-
-    % PASS arrow: offset LEFT (-7pt) so it is clearly separated from the feedback re-entry arrow
+    \draw [arrow] (gen)     -- node[label, right] {$y_0$} (validator);
+    
+    % PASS path from validator to aligner
     \draw [arrow]
-    ([xshift=-7pt]sandbox.south) --
-    node[label, left] {\textsc{pass}}
-    ([xshift=-7pt]output.north);
+    ([xshift=-8pt]validator.south) --
+    node[label, left] {\textsc{SUCCESS}}
+    ([xshift=-8pt]aligner.north);
 
-    % Feedback: sandbox error → critic
-    \draw [feedback] (sandbox.east) -- node[label, above] {\scriptsize Syntax/Empty/Null err} (critic.west);
+    \draw [arrow] (aligner) -- (output);
 
-    % Feedback: reflector logic mismatch → critic
-    \draw [feedback] (reflect.east) -| node[label, above, near start] {\scriptsize Logic mismatch} (critic.north);
+    % Loop: validator -> corrector on execution failure
+    \draw [feedback] (validator.east) -- 
+        node[label, above] {\scriptsize Syntax/Empty/Null} 
+        (corrector.west);
 
-    % Feedback: critic → sandbox, offset RIGHT (+7pt) on sandbox south to avoid PASS overlap
-    \draw [feedback] (critic.south) |- ++(0,-0.8) -|
-    node[label, below, near start] {\scriptsize $y_{i+1}$}
-    ([xshift=7pt]sandbox.south);
+    % Loop feedback: corrector -> validator's south input
+    \draw [feedback] (corrector.south) |- ++(0,-0.8) -|
+        node[label, below, near start] {\scriptsize Corrected SQL $y_{i+1}$ (Max 3)}
+        ([xshift=8pt]validator.south);
 
-    % ── BACKGROUND GROUPS ───────────────────────────────────────────────
+    % ── BACKGROUND GROUPS (LangGraph Bounding Box) ─────────────────────
     \begin{scope}[on background layer]
 
-        % ── Offline pre-processing box ──────────────────────────────────
-        \node[draw=chess_border!60, dashed, line width=0.8pt,
-            fill=chess_fill!15, inner sep=10pt,
-            rounded corners=8pt,
-            fit=(chess)(mci)(asm)] (offline_box) {};
+        % Bounding box for entire state machine
+        \node[draw=chess_border!60, dashed, line width=1.0pt,
+            fill=chess_fill!10, inner sep=12pt,
+            rounded corners=10pt,
+            fit=(router)(explorer)(gen)(validator)(corrector)(aligner)] (state_machine_box) {};
 
-        % Side tab: the caption follows the dashed outline and saves horizontal space.
+        % Bounding box label rotated on the side
         \node[anchor=center,
             rotate=90,
-            font=\sffamily\bfseries\scriptsize,
-            text=chess_border!80,
-            fill=white, inner xsep=3pt, inner ysep=1pt]
-        at (offline_box.west)
-        {OFFLINE PRE-PROCESSING (zero API cost)};
-
-        % ── Asymmetric LLM loop box ─────────────────────────────────────
-        \node[draw=critic_border!40, dashed, line width=0.8pt,
-            fill=critic_fill!10, inner sep=10pt,
-            rounded corners=8pt,
-            fit=(gen)(reflect)(sandbox)(critic)] (llm_box) {};
-
-        % Same side-tab pattern to save space while avoiding the center arrow.
-        \node[anchor=center,
-            rotate=90,
-            font=\sffamily\bfseries\scriptsize,
-            text=critic_border!70,
-            fill=white, inner xsep=3pt, inner ysep=1pt]
-        at (llm_box.west)
-        {ASYMMETRIC LLM LOOP ($\leq 3$ API calls)};
+            font=\sffamily\bfseries\small,
+            text=chess_border!85,
+            fill=white, inner xsep=4pt, inner ysep=2pt]
+        at (state_machine_box.west)
+        {AGENTSQL-ASYM LANGGRAPH STATE MACHINE};
 
     \end{scope}
 

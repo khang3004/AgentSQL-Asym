@@ -8,13 +8,14 @@ Translating natural language into executable Structured Query Language (Text-to-
     \item \textbf{Cost--Accuracy Trade-off}: Monolithic frontier-model approaches (e.g., GPT-4, Claude~3) achieve high accuracy but incur prohibitive per-query costs, making large-scale batch evaluation economically infeasible.
 \end{enumerate}
 
-To address these challenges, we present \highlight{AgentSQL}, an asymmetric multi-agent pipeline that decouples schema understanding from SQL generation and, crucially, separates logical validation from syntactical correction. AgentSQL integrates three complementary upstream modules---CHESS-based semantic pruning \parencite{talaei_chess_2024}, MCI-SQL metadata enrichment \parencite{wang_mci-sql_2026}, and MAGIC self-correction guidelines \parencite{askari_magic_2024}---into a unified four-phase pipeline orchestrated by a \texttt{MasterPipeline} class. At its core lies an \emph{Asymmetric LLM Loop}: a lightweight \textbf{Reflector} performs back-translation-based logical verification at near-zero latency, while a high-reasoning \textbf{Resilient Critic} is invoked \emph{only} when errors are detected, keeping API costs bounded to at most three calls per question.
+To address these challenges, we present \highlight{AgentSQL-Asym}, a state-of-the-art asymmetric Text-to-SQL framework orchestrated as a stateful \textbf{LangGraph State Machine}. Unlike sequential pipelines, AgentSQL-Asym dynamically routes queries based on complexity, decoupling schema exploration from generation, and separating semantic validation from high-reasoning syntactical correction. The framework employs an \textbf{Adaptive Router} to bypass schema enrichment for simple queries, and fits a \textbf{Resilient SQL Validator} loop running local SQLite sandbox executions with a \textbf{Targeted Corrector} (up to 3 iterations) to resolve failures on complex tasks. By reserving premium LLM API calls strictly for SQL generation and correction, AgentSQL-Asym maintains extreme cost-efficiency.
 
 \medskip
 \noindent\textbf{Contributions.} Our main contributions are:
 \begin{itemize}
-    \item A modular, four-phase pipeline architecture with strict cost invariants ($\leq 3$ LLM API calls per question) and full LangSmith observability.
-    \item A three-tier Semantic State Evaluation layer (\texttt{SemanticErrorChecker}) that classifies execution outcomes into \textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult} states, each carrying an actionable correction suggestion.
-    \item A round-robin \texttt{KeyRotator} abstraction supporting $N$ API keys per provider with zero-sleep rotation on HTTP~429, enabling sustained high-throughput batch evaluation.
-    \item Preliminary evaluation on the BIRD mini-dev benchmark demonstrating 80\% Execution Accuracy with an average of 2.0 API calls per question.
+    \item A stateful, asymmetric multi-agent framework orchestrated via \textbf{LangGraph}, utilizing an Adaptive Router node to dynamically bypass offline schema exploration for simple queries, minimizing latency.
+    \item A dual-candidate generation strategy in the SQL Generator node that synthesizes queries under both DDL and Markdown schema representations, selecting the optimal initial query based on sandbox execution.
+    \item A three-tier Semantic State Evaluation layer (\texttt{Resilient SQL Validator}) that classifies execution tracebacks into \textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult} states, each providing targeted suggestions to the Corrector node.
+    \item High-throughput optimizations, including a round-robin \texttt{KeyRotator} that automatically rotates API keys on HTTP~429 rate limits, and transparent fallback models to ensure zero-sleep resilience.
+    \item Empirical evaluation on the BIRD Mini-Dev debit card domain demonstrating an Execution Accuracy of \textbf{80.00\%} under an asymmetric cost budget.
 \end{itemize}

@@ -3,16 +3,15 @@
 Public API for the ``text2sql_agent.tools`` sub-package.
 
 Exposed symbols:
-    - :class:`MetadataExtractor`       — Module 1: offline MCI metadata extraction.
-    - :class:`SemanticErrorChecker`    — Module 2: three-tier semantic SQL evaluation.
-    - :class:`EmptyResultError`        — Raised on zero-row query results.
-    - :class:`NullResultError`         — Raised on all-NULL query results.
-    - :func:`run_mci_sql_pipeline`     — Module 3: standalone pipeline function.
-    - :class:`PipelineResult`          — Result container for Module 3.
-    - :class:`ChessLinker`             — CHESS semantic schema pruner.
-    - :class:`PruningResult`           — Result container for CHESS pruning.
-    - :class:`MasterPipeline`          — Unified CHESS + MCI-SQL + MAGIC orchestrator.
-    - :class:`MasterPipelineResult`    — Full trace container for MasterPipeline.
+    - :class:`MetadataExtractor`         — Module 1: offline MCI metadata extraction.
+    - :class:`SemanticErrorChecker`      — Module 2: three-tier semantic SQL evaluation.
+    - :class:`EmptyResultError`          — Raised on zero-row query results.
+    - :class:`NullResultError`           — Raised on all-NULL query results.
+    - :class:`ChessLinker`               — CHESS semantic schema pruner.
+    - :class:`PruningResult`             — Result container for CHESS pruning.
+    - :class:`SequentialPipeline`        — Unified CHESS + MCI-SQL + MAGIC orchestrator.
+    - :class:`SequentialPipelineResult`  — Full trace container for SequentialPipeline.
+    - :class:`EphemeralSandbox`          — Isolated sandbox for SQL execution.
 """
 
 from text2sql_agent.tools.metadata_extractor import MetadataExtractor
@@ -21,25 +20,21 @@ from text2sql_agent.tools.semantic_error_checker import (
     NullResultError,
     SemanticErrorChecker,
 )
-from text2sql_agent.tools.mci_sql_pipeline import (
-    PipelineResult,
-    run_mci_sql_pipeline,
-)
 from text2sql_agent.tools.chess_linker import ChessLinker, PruningResult
-from text2sql_agent.tools.master_pipeline import (
-    MasterPipeline,
-    MasterPipelineResult,
+from text2sql_agent.tools.sequential_pipeline import (
+    SequentialPipeline,
+    SequentialPipelineResult,
 )
+from text2sql_agent.tools.execution_sandbox import EphemeralSandbox
 
 __all__: list = [
     "MetadataExtractor",
     "SemanticErrorChecker",
     "EmptyResultError",
     "NullResultError",
-    "run_mci_sql_pipeline",
-    "PipelineResult",
     "ChessLinker",
     "PruningResult",
-    "MasterPipeline",
-    "MasterPipelineResult",
+    "SequentialPipeline",
+    "SequentialPipelineResult",
+    "EphemeralSandbox",
 ]

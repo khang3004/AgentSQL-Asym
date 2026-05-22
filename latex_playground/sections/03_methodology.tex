@@ -2,77 +2,65 @@
 \label{sec:method}
 
 \subsection{Problem Formulation}
-We formulate the Text-to-SQL task over a relational database $\mathcal{D} = (\mathcal{S}, \mathcal{V})$, where $\mathcal{S} = \{T_1, T_2, \ldots, T_M\}$ is the set of $M$ tables comprising the schema and $\mathcal{V}$ denotes the stored data values. Each table $T_j$ is characterised by its column set $\{c_{j,1}, \ldots, c_{j,|T_j|}\}$. Given a natural language question $Q$ and optional evidence hint $E$, the objective is to generate the optimal SQL query:
+We formulate the Text-to-SQL task over a relational database $\mathcal{D} = (\mathcal{S}, \mathcal{V})$, where $\mathcal{S} = \{T_1, T_2, \ldots, T_M\}$ is the set of $M$ tables comprising the schema and $\mathcal{V}$ denotes the stored data values. Given a natural language question $Q$, the objective is to generate the optimal executable SQL query:
 \begin{equation}
     \label{eq:objective}
-    \hat{y} = \arg\max_{y \in \mathcal{Y}} \; P_\theta\!\left(y \;\middle|\; Q, \mathcal{S}', \mathbf{C}_{\mathrm{meta}}, E\right)
+    \hat{y} = \arg\max_{y \in \mathcal{Y}} \; P_\theta\!\left(y \;\middle|\; Q, \mathcal{S}'_{\mathrm{enriched}}\right)
 \end{equation}
-where $\mathcal{S}' \subseteq \mathcal{S}$ is the CHESS-pruned schema ($|\mathcal{S}'| = k \ll M$), $\mathbf{C}_{\mathrm{meta}}$ is the MCI metadata context, and $\theta$ denotes the LLM parameters.
+where $\mathcal{S}'_{\mathrm{enriched}}$ is the dynamically constructed database context assembled by the active graph.
 
-\subsection{Architecture Overview}
-As illustrated in Figure~\ref{fig:workflow}, the \texttt{MasterPipeline} orchestrates four sequential phases with a strict cost invariant:
-
-\begin{quote}
-    \textbf{Design Invariant}: A maximum of \textbf{3 LLM API calls} per question---Generation (call~\#1), Reflection (call~\#2), and conditional Correction (call~\#3). All schema pruning, metadata extraction, and semantic validation are executed locally at zero API cost.
-\end{quote}
+\subsection{Architecture Overview: The Asymmetric LangGraph State Machine}
+Rather than orchestrating static sequential pipelines, we model the Text-to-SQL workflow as a unified, stateful \textbf{LangGraph State Machine} ($\mathcal{G}$). The state of the system is governed by a persistent \texttt{State} dictionary:
+\begin{equation}
+    \mathbf{X} = \left\langle Q, \; \mathcal{D}_{\mathrm{path}}, \; \mathcal{C}, \; \mathbf{H}, \; \{y_k\}, \; \hat{y}, \; e_i, \; t_i \right\rangle
+\end{equation}
+where $\mathcal{C} \in \{\textsc{Simple}, \textsc{Complex}\}$ is the query complexity, $\mathbf{H}$ is the enriched schema context, $\{y_k\}$ represents candidate SQL queries, $e_i$ is the semantic execution traceback, and $t_i$ is the iteration count. 
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=0.88\textwidth]{tikz_artifacts/agentsql_workflow.pdf}
-    \caption{The AgentSQL \texttt{MasterPipeline} architecture. Phases~1--3 (blue dashed box) run entirely offline against the local SQLite database. Phase~4 (red dashed box) implements the asymmetric LLM loop with at most 3 API calls: the Generator and Reflector use \texttt{llama-4-scout-17b} via Groq, while the Resilient Critic uses \texttt{gemini-2.5-flash} and is activated only on detected errors.}
+    \caption{The AgentSQL-Asym LangGraph State Machine. For simple queries, the Adaptive Router (Node 1) directly invokes the SQL Generator (Node 3) bypassing offline schema exploration entirely. Complex queries trigger the Schema Explorer (Node 2) to build a multi-faceted metadata context (CHESS + MCI). The Resilient SQL Validator (Node 4) locally executes queries in a sandbox, looping with the Targeted Corrector (Node 6) up to 3 times on semantic errors, before the Output Aligner (Node 5) delivers the finalized query.}
     \label{fig:workflow}
 \end{figure*}
 
-\subsection{Phase~1: CHESS Semantic Pruning}
-Given the question $Q$, we embed it using the BGE asymmetric query prefix and retrieve the Top-$k$ tables from a pre-built FAISS index \parencite{johnson2019faiss, xiao2024cpackpackedresourcesgeneral}:
+\subsection{Node 1: Adaptive Router Node}
+To minimise token expenditure and latency, the query enters the \textbf{Adaptive Router} node first. We deploy a fast, instruction-tuned language model $M_{\mathrm{route}}$ (\texttt{openai/gpt-oss-20b} via Groq) to classify the complexity of the natural language question $Q$:
 \begin{equation}
-    \label{eq:chess}
+    \mathcal{C} = \operatorname{Classifier}_{M_{\mathrm{route}}}(Q)
+\end{equation}
+If the query is classified as $\textsc{Simple}$ (e.g. single-table query without complex filters or joins), the graph routes \textbf{directly} to the SQL Generator (Node 3), skipping the schema exploration layer to save time. If classified as $\textsc{Complex}$, the graph triggers the Schema Explorer (Node 2).
+
+\subsection{Node 2: Schema Explorer Node}
+The \textbf{Schema Explorer} fuses semantic schema pruning and metadata profiling into a single high-fidelity context builder:
+
+\subsubsection{CHESS Pruning}
+We embed the query $Q$ using the BGE asymmetric prefix model and retrieve the Top-$k$ most relevant tables using a pre-computed inner-product FAISS index:
+\begin{equation}
     \mathcal{S}' = \operatorname{Top\text{-}k}_{T_j \in \mathcal{S}} \left\langle \mathbf{e}_Q, \; \mathbf{e}_{T_j} \right\rangle
 \end{equation}
-where $\mathbf{e}_Q = f_\theta(\texttt{``Represent this sentence: ''} \| Q)$ is the L2-normalised query embedding and $\mathbf{e}_{T_j}$ is the pre-computed table representation stored in the FAISS \texttt{IndexFlatIP}. The index is built \emph{once offline} by \texttt{build\_offline\_index.py}, encoding each table as a concatenation of its name, column names, and data-type declarations. This reduces the schema from $M$ tables to $k$ (default $k=3$), yielding a typical reduction ratio of 60--80\%.
 
-\subsection{Phase~2: MCI-SQL Metadata Enrichment}
-The \texttt{MetadataExtractor} profiles each column $c \in \mathcal{S}'$ locally via SQLite PRAGMA introspection and targeted queries:
-
+\subsubsection{MCI-SQL Enrichment}
+For each retrieved table $T \in \mathcal{S}'$, the node performs local SQLite introspection queries to build a profile context:
 \begin{itemize}
-    \item \textbf{Numeric columns}: Extracts $\min(c)$ and $\max(c)$ for range validation.
-    \item \textbf{Text columns}: Fetches $n_s = 3$ random non-null samples via \texttt{ORDER BY RANDOM() LIMIT 3} for literal value grounding.
-    \item \textbf{Cardinality inference}: Computes $\frac{|\texttt{DISTINCT}(c)|}{|\texttt{COUNT}(*)|}$ to classify each column as \textsc{1:1 (PK-like)} or \textsc{1:N (FK/Categorical)}, guiding the LLM's join reasoning.
+    \item \textbf{Numeric columns}: Extracts absolute $\min(c)$ and $\max(c)$ range limits.
+    \item \textbf{Text columns}: Obtains $n_s = 3$ random non-null literal sample values.
+    \item \textbf{Cardinality profiling}: Infers key relationships by computing unique ratios:
+    \begin{equation}
+        \operatorname{Card}(c) = \frac{|\operatorname{DISTINCT}(c)|}{|\operatorname{COUNT}(*)|}
+    \end{equation}
 \end{itemize}
-The result is a compact JSON string $\mathbf{C}_{\mathrm{meta}}$ with zero whitespace separators, minimising token consumption.
+The result is consolidated into the enriched context string $\mathcal{S}'_{\mathrm{enriched}}$, which minimizes schema noise from other tables.
 
-\subsection{Phase~3: Context Assembly}
-Phases~1 and~2 are fused into a single enriched prompt $P_{\mathrm{enriched}}$:
-\begin{equation}
-    \label{eq:prompt}
-    P_{\mathrm{enriched}} = \texttt{DDL}(\mathcal{S}') \;\|\; \mathbf{C}_{\mathrm{meta}} \;\|\; \mathcal{G}_{\mathrm{MAGIC}} \;\|\; Q \;\|\; E
-\end{equation}
-where $\mathcal{G}_{\mathrm{MAGIC}}$ is an 8-rule MAGIC self-correction checklist \parencite{askari_magic_2024} covering common failure modes: \texttt{LIMIT/ORDER~BY} misuse, aggregation granularity, ratio casting, date format mismatches, join path validation, projection minimality, and extreme-value patterns.
+\subsection{Node 3: SQL Generator Node}
+The \textbf{SQL Generator Node} utilizes the premium \texttt{google/gemma-4-31b-it} model to synthesize two parallel candidate queries:
+\begin{enumerate}
+    \item \textbf{Candidate 1 ($y_1$)}: Generated using the standard DDL schema representation.
+    \item \textbf{Candidate 2 ($y_2$)}: Generated using a lightweight Markdown-formatted schema description.
+\end{enumerate}
+Both candidates are instantly run inside a local SQLite execution sandbox. The node evaluates sandbox feedback ($e_1, e_2$) and selects the best candidate (the one executing successfully, or the one with fewer syntactic errors) as the starting candidate $y_0$.
 
-\subsection{Phase~4: Asymmetric LLM Loop}
-\label{subsec:asym_loop}
-
-The pipeline enters the online LLM loop:
-
-\subsubsection{Phase~4a: Generator}
-A cost-efficient model $G$ (\texttt{llama-4-scout-17b} via Groq) produces the initial candidate:
-\begin{equation}
-    y_0 = G(P_{\mathrm{enriched}})
-\end{equation}
-The generator prompt forces a mandatory \texttt{<thought>} reasoning block declaring selected tables, join paths, and result grain before emitting the SQL.
-
-\subsubsection{Phase~4ab: Reflector}
-The same lightweight model $R$ performs a back-translation consistency check:
-\begin{equation}
-    R(Q, y_0) = \begin{cases}
-        \texttt{<ok>}                            & \text{if SQL $\leftrightarrow$ NL consistent} \\
-        \texttt{<error>}~\delta_{\mathrm{logic}} & \text{otherwise}
-    \end{cases}
-\end{equation}
-where $\delta_{\mathrm{logic}}$ is a one-sentence description of the logical mismatch (e.g., ``\textit{Uses MIN instead of MAX for highest consumption}''). This catches silent logical errors that the database engine cannot detect.
-
-\subsubsection{Phase~4b: Semantic State Evaluation}
-If the Reflector approves, the SQL is executed locally by the \texttt{SemanticErrorChecker}, which classifies the outcome into one of four states:
+\subsection{Node 4: Resilient SQL Validator Node}
+The \textbf{SQL Validator} executes the active candidate SQL query $y_i$ in the local sandbox and evaluates its semantic state using a three-tier taxonomy (Table~\ref{tab:semantic_states}):
 
 \begin{table}[h]
     \centering
@@ -82,26 +70,28 @@ If the Reflector approves, the SQL is executed locally by the \texttt{SemanticEr
     \setlength{\tabcolsep}{3pt}
     \begin{tabularx}{\columnwidth}{@{}l>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
         \toprule
-        \textbf{State}       & \textbf{Trigger}                  & \textbf{Suggestion Strategy}         \\
+        \textbf{State}       & \textbf{Trigger}                  & \textbf{Description}                 \\
         \midrule
-        \textsc{SyntaxError} & SQLite \texttt{OperationalError}  & Fix column/table name                \\
-        \textsc{EmptyResult} & $|\mathrm{rows}| = 0$             & Use \texttt{LIKE} / \texttt{LOWER()} \\
-        \textsc{NullResult}  & $\forall$ cells $= \texttt{NULL}$ & Fix JOIN ON clause                   \\
-        \textsc{Valid}       & Non-empty, non-null rows          & Accept $\hat{y}$                     \\
+        \textsc{SyntaxError} & SQLite \texttt{OperationalError}  & Compilation or table/column mismatches\\
+        \textsc{EmptyResult} & $|\mathrm{rows}| = 0$             & Executed but returned empty results  \\
+        \textsc{NullResult}  & $\forall$ cells $= \texttt{NULL}$ & Empty projection due to faulty JOIN  \\
+        \textsc{Success}     & Non-empty, non-null rows          & Validated execution success           \\
         \bottomrule
     \end{tabularx}
 \end{table}
 
-\subsubsection{Phase~4c: Resilient Critic}
-If \emph{any} error is detected (logical from Reflector or semantic from the checker), the Critic $C$ (\texttt{gemini-2.5-flash}) is invoked with the full error context:
-\begin{equation}
-    y_{i+1} = C\!\left(y_i, \; \delta_{\mathrm{error}}, \; \texttt{DDL}(\mathcal{S}'), \; \mathbf{C}_{\mathrm{meta}}, \; \mathcal{G}_{\mathrm{MAGIC}}\right)
-\end{equation}
-The corrected SQL is re-validated locally. The loop terminates when validation succeeds or the iteration budget $T_{\max} = 3$ is exhausted.
+If the state is evaluated as \textsc{Success}, the graph immediately exits the loop and routes to Node 5 (Output Aligner). If any other state is triggered, the query is routed to Node 6 (Targeted Corrector).
 
-\subsection{System-Level Optimizations for High-Throughput}
-Two engineering contributions underpin production reliability:
-\begin{itemize}
-    \item \textbf{Round-Robin \texttt{KeyRotator}}: Manages $N$ API keys per provider (e.g., $N=4$ Groq keys). On HTTP~429, the system rotates to the next key with \emph{zero sleep}, achieving sustained throughput during batch evaluations.
-    \item \textbf{\texttt{ResilientGroqLLM} two-tier fallback}: If all $N$ keys are exhausted on the primary model (\texttt{gpt-oss-120b}), the factory transparently degrades to \texttt{llama-4-scout-17b} on the same key pool without pipeline interruption.
-\end{itemize}
+\subsection{Node 6: Targeted Resilient Corrector Node}
+When a query fails validation, the \textbf{Targeted Corrector} ($M_{\mathrm{correct}}$, using the high-capacity \texttt{openai/gpt-oss-120b} via Groq) is invoked. The corrector receives:
+\begin{equation}
+    y_{i+1} = M_{\mathrm{correct}}(y_i, \; e_i, \; \mathcal{S}'_{\mathrm{enriched}})
+\end{equation}
+where $e_i$ is the exact compiler traceback or logical mismatch report. The corrected query $y_{i+1}$ is returned to Node 4 (SQL Validator) for re-execution. This feedback loop runs up to $T_{\max} = 3$ iterations before falling back to a safe fallback selection.
+
+\subsection{Node 5: Output Aligner Node}
+Once validation succeeds, the \textbf{Output Aligner} ($M_{\mathrm{align}}$, using \texttt{openai/gpt-oss-20b} via Groq) standardizes the SELECT projection:
+\begin{equation}
+    \hat{y} = M_{\mathrm{align}}(y_{\mathrm{valid}}, \; Q)
+\end{equation}
+It ensures table alias conventions, keyword casings, and sorting orders are perfectly aligned with the ground truth patterns expected for BIRD, outputting the final executable query $\hat{y}$.

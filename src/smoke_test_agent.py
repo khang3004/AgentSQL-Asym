@@ -11,7 +11,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-from text2sql_agent.workflow.graph import compile_workflow
+from text2sql_agent.workflow.agent_workflow import compile_workflow
 
 def main():
     graph = compile_workflow()

@@ -559,6 +559,10 @@ def get_llm(role: str, model_name: str | None = None, provider: str | None = Non
         "critic":    ("openai/gpt-oss-20b", 1024),   # legacy alias
         # Reflection uses the scout model: blazing fast, always available.
         "reflector": ("meta-llama/llama-4-scout-17b-16e-instruct", 512),
+        # Router: fast, cheap — only classifies SIMPLE vs COMPLEX
+        "router":    (os.getenv("ROUTER_MODEL", "openai/gpt-oss-20b"), 256),
+        # Aligner: post-processes SELECT clause to match question
+        "aligner":   (os.getenv("ALIGNMENT_MODEL", "openai/gpt-oss-20b"), 512),
     }
 
     if role_lower not in _DEFAULTS:
@@ -578,6 +582,10 @@ def get_llm(role: str, model_name: str | None = None, provider: str | None = Non
             resolved_provider = os.environ.get("GENERATOR_PROVIDER", "groq")
         elif role_lower in ("critic", "corrector"):
             resolved_provider = os.environ.get("CRITIC_PROVIDER", "google" if ("gemini" in resolved_model.lower() or "gemma" in resolved_model.lower()) else "groq")
+        elif role_lower == "router":
+            resolved_provider = os.environ.get("ROUTER_PROVIDER", "groq")
+        elif role_lower == "aligner":
+            resolved_provider = os.environ.get("ALIGNMENT_PROVIDER", "groq")
         else:
             resolved_provider = "groq"
 

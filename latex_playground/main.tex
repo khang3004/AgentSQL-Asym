@@ -26,8 +26,8 @@
 % --- AUTHOR BLOCK REFACTORED (GROUPED STYLE) ---
 \author{
     \IEEEauthorblockN{\textbf{Hoang-Khang Nguyen}, \textbf{Ngoc-Phuong-Dung Tran}, \textbf{Ha-Phuong Pham}, and \textbf{Quang-Khai Nguyen}}\\
-    \IEEEauthorblockA{\small Master of Data Science Program, University of Science, VNU-HCM, Vietnam\\
-        \textit{\{25c0103580, 25c0102837, 25c0104350, 25c0100785\}@student.hcmus.edu.vn}}
+    \IEEEauthorblockA{\small Master of Data Science Program, University of Science, Ho Chi Minh City, Vietnam\\
+        \textit{\{25c0103580, 25c01028Ô37, 25c0104350, 25c0100785\}@student.hcmus.edu.vn}}
 }
 
 % -----------------------------------------------------------------------------
@@ -35,7 +35,7 @@
 % -----------------------------------------------------------------------------
 \IEEEtitleabstractindextext{%
     \begin{abstract}
-        Translating natural language into executable SQL (Text-to-SQL) on enterprise-scale databases remains challenging due to schema ambiguity, error-type conflation, and prohibitive LLM inference costs. We present AgentSQL, an asymmetric multi-agent pipeline that addresses these challenges through three key innovations: (1)~a four-phase architecture integrating CHESS-based FAISS semantic pruning, MCI-SQL metadata enrichment, and MAGIC self-correction guidelines with a strict cost invariant of at most three LLM API calls per question; (2)~a Reflector--Critic asymmetric loop that decouples lightweight logical validation (back-translation consistency) from high-reasoning syntactical correction, invoking the expensive Critic model only when errors are detected; and (3)~a three-tier Semantic State Evaluation layer that classifies execution outcomes into \textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult} states, each carrying actionable correction suggestions. A round-robin key-rotation mechanism with zero-sleep failover enables sustained throughput during batch evaluation. Preliminary experiments on the BIRD Mini-Dev benchmark demonstrate 80\% Execution Accuracy with an average of 2.0 API calls per question, validating the cost-efficiency of the asymmetric model allocation strategy. \par\vspace{0.5em}\noindent \textbf{\faGithub{} Source Code:} \url{https://github.com/khang3004/AgentSQL-Asym.git}
+        Translating natural language into executable SQL (Text-to-SQL) on enterprise-scale databases remains challenging due to schema ambiguity, error-type conflation, and prohibitive LLM inference costs. We present AgentSQL-Asym, a stateful asymmetric multi-agent framework orchestrated as a unified LangGraph State Machine. AgentSQL-Asym addresses these challenges through three key innovations: (1)~an Adaptive Router node that dynamically classifies query complexity to bypass schema exploration for simple queries, minimizing token consumption; (2)~a dual-candidate generation strategy combining DDL and Markdown schema formats with real-time SQLite sandbox evaluation to select optimal initial candidates; and (3)~a Resilient SQL Validator that performs three-tier semantic state evaluations (\textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult}) to drive targeted corrections (up to three loops) with a high-capacity corrector. A round-robin key-rotation mechanism with zero-sleep failover enables sustained high throughput. Empirical evaluation on the BIRD Mini-Dev benchmark demonstrates an Execution Accuracy of 80.00\% on the debit card specialization domain under an asymmetric model budget, validating the cost-efficiency and resilience of our state-machine design.
     \end{abstract}
 
     \begin{IEEEkeywords}

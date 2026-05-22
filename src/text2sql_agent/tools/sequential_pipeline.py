@@ -1,4 +1,4 @@
-"""MasterPipeline — Unified CHESS + MCI-SQL + MAGIC orchestrator.
+"""SequentialPipeline — Unified CHESS + MCI-SQL + MAGIC orchestrator.
 
 This module integrates the three upstream modules into a single, traceable
 end-to-end Text-to-SQL pipeline:
@@ -106,8 +106,8 @@ _MAGIC_GUIDELINES: str = """MAGIC SQL Correction Checklist:
 
 
 @dataclass
-class MasterPipelineResult:
-    """Complete execution trace produced by ``MasterPipeline.run``.
+class SequentialPipelineResult:
+    """Complete execution trace produced by ``SequentialPipeline.run``.
 
     Attributes:
         question (str): Original natural language question.
@@ -144,11 +144,11 @@ class MasterPipelineResult:
 
 
 # ---------------------------------------------------------------------------
-# MasterPipeline
+# SequentialPipeline
 # ---------------------------------------------------------------------------
 
 
-class MasterPipeline:
+class SequentialPipeline:
     """Orchestrates the four-phase CHESS + MCI-SQL + MAGIC pipeline.
 
     Instantiate once and call ``run()`` for each question.  The FAISS index
@@ -230,7 +230,7 @@ class MasterPipeline:
         )
 
         logger.info(
-            "[MasterPipeline] Initialised — top_k=%d, embed=%s, "
+            "[SequentialPipeline] Initialised — top_k=%d, embed=%s, "
             "index_dir=%s, gen=%s/%s, critic=%s/%s",
             top_k,
             embedding_model,
@@ -263,13 +263,13 @@ class MasterPipeline:
                 and pruned DDL.
         """
         logger.info(
-            "[MasterPipeline | Phase 1] CHESS pruning — top_k=%d", self.top_k
+            "[SequentialPipeline | Phase 1] CHESS pruning — top_k=%d", self.top_k
         )
         result: PruningResult = self._linker.prune(
             question=question, db_path=db_path, top_k=self.top_k
         )
         logger.info(
-            "[MasterPipeline | Phase 1] %d → %d tables retained "
+            "[SequentialPipeline | Phase 1] %d → %d tables retained "
             "(reduction=%.0f%%, schema_ddl=%d chars).",
             len(result.all_tables),
             len(result.selected_tables),
@@ -299,13 +299,13 @@ class MasterPipeline:
                 tables and their columns.
         """
         logger.info(
-            "[MasterPipeline | Phase 2] MCI extraction for tables: %s",
+            "[SequentialPipeline | Phase 2] MCI extraction for tables: %s",
             selected_tables,
         )
         extractor = MetadataExtractor(db_path=db_path)
         context: str = extractor.build_context(tables=selected_tables)
         logger.info(
-            "[MasterPipeline | Phase 2] Metadata context: %d chars.",
+            "[SequentialPipeline | Phase 2] Metadata context: %d chars.",
             len(context),
         )
         return context
@@ -360,7 +360,7 @@ class MasterPipeline:
             f"{self.sql_dialect} SELECT query — no comments, no markdown.\n"
         )
         logger.info(
-            "[MasterPipeline | Phase 3] Assembled prompt: %d chars.",
+            "[SequentialPipeline | Phase 3] Assembled prompt: %d chars.",
             len(prompt),
         )
         return prompt
@@ -381,7 +381,7 @@ class MasterPipeline:
                 as a safe fallback if extraction fails.
         """
         logger.info(
-            "[MasterPipeline | Phase 4a] Generator LLM: %s / %s",
+            "[SequentialPipeline | Phase 4a] Generator LLM: %s / %s",
             self.generator_provider,
             self.generator_model,
         )
@@ -394,13 +394,13 @@ class MasterPipeline:
             raw: str = llm.generate(enriched_prompt)
             sql: str = extract_sql(raw)
             logger.info(
-                "[MasterPipeline | Phase 4a] Generator SQL: %s",
+                "[SequentialPipeline | Phase 4a] Generator SQL: %s",
                 sql[:120].replace("\n", " "),
             )
             return sql or "SELECT 1;"
         except Exception as exc:  # noqa: BLE001
             logger.error(
-                "[MasterPipeline | Phase 4a] Generator error: %s", exc
+                "[SequentialPipeline | Phase 4a] Generator error: %s", exc
             )
             return "SELECT 1;"
 
@@ -444,11 +444,11 @@ class MasterPipeline:
             raw: str = llm.generate(reflection_prompt)
             raw_stripped = raw.strip()
             logger.info(
-                "[MasterPipeline | Phase 4ab] Reflection response: %s",
+                "[SequentialPipeline | Phase 4ab] Reflection response: %s",
                 raw_stripped[:200],
             )
             if "<ok>" in raw_stripped.lower():
-                logger.info("[MasterPipeline | Phase 4ab] ✓ SQL passed reflection.")
+                logger.info("[SequentialPipeline | Phase 4ab] ✓ SQL passed reflection.")
                 return None
             # Extract <error>...</error> content
             import re as _re
@@ -461,13 +461,13 @@ class MasterPipeline:
                 # Fallback: treat the whole response as the error
                 mismatch = raw_stripped
             logger.warning(
-                "[MasterPipeline | Phase 4ab] ✗ Logical mismatch detected: %s", mismatch
+                "[SequentialPipeline | Phase 4ab] ✗ Logical mismatch detected: %s", mismatch
             )
             return mismatch
         except Exception as exc:  # noqa: BLE001
             # Reflection is best-effort — never block the pipeline
             logger.warning(
-                "[MasterPipeline | Phase 4ab] Reflection failed (skipping): %s", exc
+                "[SequentialPipeline | Phase 4ab] Reflection failed (skipping): %s", exc
             )
             return None
 
@@ -493,18 +493,18 @@ class MasterPipeline:
                 on any semantic failure.
         """
         logger.info(
-            "[MasterPipeline | Phase 4b] Semantic validation (local)..."
+            "[SequentialPipeline | Phase 4b] Semantic validation (local)..."
         )
         checker = SemanticErrorChecker(db_path=db_path)
         rows, error_msg = checker.execute_safe(sql)
         if error_msg:
             logger.warning(
-                "[MasterPipeline | Phase 4b] Semantic error: %s",
+                "[SequentialPipeline | Phase 4b] Semantic error: %s",
                 error_msg[:200],
             )
         else:
             logger.info(
-                "[MasterPipeline | Phase 4b] ✓ Valid — %d rows returned.",
+                "[SequentialPipeline | Phase 4b] ✓ Valid — %d rows returned.",
                 len(rows) if rows else 0,
             )
         return rows, error_msg
@@ -545,7 +545,7 @@ class MasterPipeline:
                 ``bad_sql`` as a safe fallback.
         """
         logger.info(
-            "[MasterPipeline | Phase 4c] Critic LLM: %s / %s",
+            "[SequentialPipeline | Phase 4c] Critic LLM: %s / %s",
             self.critic_provider,
             self.critic_model,
         )
@@ -578,13 +578,13 @@ class MasterPipeline:
             raw: str = llm.generate(correction_prompt)
             corrected: str = extract_sql(raw, fallback=bad_sql)
             logger.info(
-                "[MasterPipeline | Phase 4c] Corrected SQL: %s",
+                "[SequentialPipeline | Phase 4c] Corrected SQL: %s",
                 corrected[:120].replace("\n", " "),
             )
             return corrected
         except Exception as exc:  # noqa: BLE001
             logger.error(
-                "[MasterPipeline | Phase 4c] Critic error: %s", exc
+                "[SequentialPipeline | Phase 4c] Critic error: %s", exc
             )
             return bad_sql
 
@@ -601,7 +601,7 @@ class MasterPipeline:
         guideline_memory: str = "",
         tags: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
-    ) -> MasterPipelineResult:
+    ) -> SequentialPipelineResult:
         """Executes the full pipeline for a single question.
 
         Phases summary:
@@ -623,7 +623,7 @@ class MasterPipeline:
                 Defaults to ``""``.
 
         Returns:
-            MasterPipelineResult: Complete execution trace including
+            SequentialPipelineResult: Complete execution trace including
                 pruning details, metadata, SQL candidates, row results,
                 and the exact number of API calls consumed.
 
@@ -635,7 +635,7 @@ class MasterPipeline:
 
         Example::
 
-            pipeline = MasterPipeline(top_k=3)
+            pipeline = SequentialPipeline(top_k=3)
             result = pipeline.run(
                 question="How many customers are in the VIP segment?",
                 db_path="data_minidev/MINIDEV/dev_databases/"
@@ -647,7 +647,7 @@ class MasterPipeline:
             print(f"Tables pruned: {result.pruning.reduction_ratio:.0%}")
         """
         logger.info(
-            "[MasterPipeline] ══════ START ══════ question=%s",
+            "[SequentialPipeline] ══════ START ══════ question=%s",
             question[:80],
         )
 
@@ -692,7 +692,7 @@ class MasterPipeline:
         # ── Phase 4c: MAGIC Critic Correction (API call #3, conditional)
         if error_message is not None:
             logger.info(
-                "[MasterPipeline] Triggering corrector — reason: %s",
+                "[SequentialPipeline] Triggering corrector — reason: %s",
                 "semantic" if semantic_error else "logical reflection",
             )
             critic_corrected_sql = self._phase4c_correct(
@@ -713,17 +713,17 @@ class MasterPipeline:
             )
             if final_err:
                 logger.error(
-                    "[MasterPipeline] Critic correction still failing: %s",
+                    "[SequentialPipeline] Critic correction still failing: %s",
                     final_err[:200],
                 )
             else:
                 logger.info(
-                    "[MasterPipeline] Critic correction validated — rows: %d",
+                    "[SequentialPipeline] Critic correction validated — rows: %d",
                     len(rows) if rows else 0,
                 )
 
         logger.info(
-            "[MasterPipeline] ══════ END ══════ api_calls=%d | "
+            "[SequentialPipeline] ══════ END ══════ api_calls=%d | "
             "tables=%d/%d | meta=%d chars | prompt=%d chars",
             api_calls_made,
             len(pruning.selected_tables),
@@ -732,7 +732,7 @@ class MasterPipeline:
             len(enriched_prompt),
         )
 
-        return MasterPipelineResult(
+        return SequentialPipelineResult(
             question=question,
             db_path=db_path,
             pruning=pruning,
@@ -764,7 +764,7 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser(
-        description="MasterPipeline demo (CHESS + MCI-SQL + MAGIC)."
+        description="SequentialPipeline demo (CHESS + MCI-SQL + MAGIC)."
     )
     parser.add_argument("--db_path", type=str, required=True)
     parser.add_argument(
@@ -776,15 +776,15 @@ if __name__ == "__main__":
     parser.add_argument("--evidence", type=str, default="")
     args = parser.parse_args()
 
-    pipeline = MasterPipeline(top_k=args.top_k)
-    result: MasterPipelineResult = pipeline.run(
+    pipeline = SequentialPipeline(top_k=args.top_k)
+    result: SequentialPipelineResult = pipeline.run(
         question=args.question,
         db_path=args.db_path,
         evidence=args.evidence,
     )
 
     sep = "=" * 70
-    print(f"\n{sep}\nMASTER PIPELINE RESULT\n{sep}")
+    print(f"\n{sep}\nSEQUENTIAL PIPELINE RESULT\n{sep}")
     print(f"Question        : {result.question}")
     print(f"Final SQL       : {result.final_sql}")
     print(f"Rows returned   : {len(result.rows) if result.rows else 0}")

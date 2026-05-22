@@ -1,6 +1,6 @@
 """Module to define the structure of the Agent's state in LangGraph."""
 
-from typing import NotRequired, TypedDict
+from typing import NotRequired, TypedDict, Literal
 
 
 """ Agentic Text-to-SQL workflow orchestrator built on LangGraph.
@@ -63,3 +63,7 @@ class AgentState(TypedDict):
     execution_feedback: str
     guideline: str
     iteration_count: int
+    query_complexity: NotRequired[Literal["SIMPLE", "COMPLEX"]]
+    candidate_sqls: NotRequired[dict[str, str]]
+    metadata_context: NotRequired[str]    # MCI JSON from MetadataExtractor (schema_explorer)
+    reflection_error: NotRequired[str]    # Logical mismatch from Reflection (sql_validator)
