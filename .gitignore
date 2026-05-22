@@ -52,3 +52,7 @@ src/text2sql_agent/index/schema_index.faiss
 *-blx.aux
 *-blx.bib
 *.run.xml
+
+# IEEE conference template
+latex_playground/IEEE-conference-template-062824/
+latex_playground/IEEEtranBST2/
