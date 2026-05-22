@@ -7,10 +7,10 @@ tikz:
 
 main:
 	pdflatex -interaction=nonstopmode main.tex
-	biber main
+	bibtex main
 	pdflatex -interaction=nonstopmode main.tex
 	pdflatex -interaction=nonstopmode main.tex
 
 clean:
-	rm -f *.aux *.log *.out *.bbl *.bcf *.blg *.run.xml *.synctex.gz *.toc
+	rm -f *.aux *.log *.out *.bbl *.blg *.bcf *.run.xml *.synctex.gz *.toc
 	rm -f tikz_artifacts/*.aux tikz_artifacts/*.log

@@ -3,7 +3,7 @@
 
 Translating natural language into executable Structured Query Language (Text-to-SQL) has emerged as a pivotal capability for enabling non-expert users to interrogate large-scale relational databases. Despite remarkable progress driven by Large Language Models (LLMs), the gap between research prototypes and production-grade interfaces remains significant. Current systems face three interrelated challenges:
 \begin{enumerate}
-    \item \textbf{Schema Ambiguity}: Enterprise databases routinely contain hundreds of tables with cryptic naming conventions, causing LLMs to hallucinate non-existent columns or misinterpret join paths \parencite{li_can_2023, floratou2024broken}.
+    \item \textbf{Schema Ambiguity}: Enterprise databases routinely contain hundreds of tables with cryptic naming conventions, causing LLMs to hallucinate non-existent columns or misinterpret join paths \cite{li_can_2023, floratou2024broken}.
     \item \textbf{Error Taxonomy}: Existing correction mechanisms conflate syntactical errors (detectable by the database engine) with logical errors (semantically incorrect but syntactically valid queries). A unified correction prompt wastes reasoning capacity on trivially diagnosable failures.
     \item \textbf{Cost--Accuracy Trade-off}: Monolithic frontier-model approaches (e.g., GPT-4, Claude~3) achieve high accuracy but incur prohibitive per-query costs, making large-scale batch evaluation economically infeasible.
 \end{enumerate}

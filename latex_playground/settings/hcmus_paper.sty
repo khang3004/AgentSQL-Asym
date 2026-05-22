@@ -4,18 +4,11 @@
 % -----------------------------------------------------------------------------
 % 1. CORE PACKAGES & TYPOGRAPHY
 % -----------------------------------------------------------------------------
-\RequirePackage[T5]{fontenc}
 \RequirePackage[utf8]{inputenc}
-\RequirePackage{lmodern}           % High-quality Latin Modern fonts
-\RequirePackage{microtype}         % Enhances typography and justification
-\RequirePackage{hyperref}          % Clickable links and cross-references
-\hypersetup{
-    colorlinks=true,
-    linkcolor=DeepBlue,
-    citecolor=codeGreen,
-    urlcolor=techBlue
-}
-\RequirePackage{fontawesome5}      % For \faGithub
+\RequirePackage{cite}              % IEEE numeric citation compression/sorting
+\RequirePackage{textcomp}          % IEEE template compatibility
+\RequirePackage{xurl}              % Robust line breaks for long URLs
+\RequirePackage{fontawesome5}      % GitHub icon in the author/project block
 
 % -----------------------------------------------------------------------------
 % 2. MATHEMATICS & ALGORITHMS
@@ -30,12 +23,6 @@
 \RequirePackage{booktabs}          % Professional tables (top/mid/bottom rules)
 \RequirePackage{tabularx}          % Column-width constrained tables
 \RequirePackage{multirow}          % Spanning multiple rows in tables
-\RequirePackage{caption}
-\RequirePackage{subcaption}        % Side-by-side figures
-\RequirePackage{standalone}        % Import standalone tikz files
-\RequirePackage{tikz}              % TikZ drawing
-\usetikzlibrary{shapes.geometric, arrows.meta, positioning, shadows, backgrounds, fit}
-\RequirePackage[linesnumbered,ruled,vlined]{algorithm2e} % Professional algorithms
 
 % Set default path for graphics
 \graphicspath{{./figures/}}
@@ -48,6 +35,8 @@
 \definecolor{alertRed}{RGB}{200, 30, 30}
 \definecolor{codeGreen}{RGB}{0, 150, 80}
 \definecolor{DeepBlue}{RGB}{0, 51, 102}
+
+\RequirePackage[hidelinks]{hyperref} % Load late; keep IEEE-compatible black links.
 
 % -----------------------------------------------------------------------------
 % 5. CUSTOM MACROS (DECORATORS & MATH ALIASES)

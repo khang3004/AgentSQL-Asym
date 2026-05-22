@@ -1,50 +1,48 @@
 % =============================================================================
 % @file:       main.tex
 % @brief:      Main entry point for the Scientific Research course paper.
-% @compile:    pdflatex -> biber -> pdflatex -> pdflatex
+% @compile:    pdflatex -> bibtex -> pdflatex -> pdflatex
 % =============================================================================
 
-% Use IEEE transaction format (two-column, standard for AI/CS papers)
-\documentclass[10pt, journal, compsoc]{IEEEtran}
+% Use IEEE conference format, matching the official IEEE conference template.
+\documentclass[conference]{IEEEtran}
 
 % Import our customized styling module
 \usepackage{settings/hcmus_paper}
-
-% Import Bibliography management (using biblatex for APA style)
-\usepackage[style=apa, backend=biber]{biblatex}
-\addbibresource{bib/references.bib}
 
 \begin{document}
 
 % -----------------------------------------------------------------------------
 % METADATA (Title & Authors)
 % -----------------------------------------------------------------------------
-\title{\huge \textbf{AgentSQL: A Scalable and Resilient Asymmetric LLM Pipeline for Text-to-SQL Workflows}}
-
-\date{}
+\title{AgentSQL: A Scalable and Resilient Asymmetric LLM Pipeline for Text-to-SQL Workflows}
 
 % --- AUTHOR BLOCK REFACTORED (GROUPED STYLE) ---
 \author{
-    \IEEEauthorblockN{\textbf{Hoang-Khang Nguyen}, \textbf{Ngoc-Phuong-Dung Tran}, \textbf{Ha-Phuong Pham}, and \textbf{Quang-Khai Nguyen}}\\
-    \IEEEauthorblockA{\small Master of Data Science Program, University of Science, Ho Chi Minh City, Vietnam\\
-        \textit{\{25c0103580, 25c01028Ô37, 25c0104350, 25c0100785\}@student.hcmus.edu.vn}}
+    \IEEEauthorblockN{
+        Hoang-Khang Nguyen,
+        Ngoc-Phuong-Dung Tran,
+        Ha-Phuong Pham,
+        and Quang-Khai Nguyen
+    }
+    \IEEEauthorblockA{Master of Data Science Program,
+        \textbf{University of Science}, \textbf{Vietnam National University, Ho Chi Minh City}, Vietnam}
+    \IEEEauthorblockA{\{25c0103580, 25c0102837, 25c0104350, 25c0100785\}@student.hcmus.edu.vn}
+    \IEEEauthorblockA{\faGithub\ \href{https://github.com/khang3004/AgentSQL-Asym.git}{\texttt{khang3004/AgentSQL-Asym.git}}}
 }
 
 % -----------------------------------------------------------------------------
 % ABSTRACT & KEYWORDS
 % -----------------------------------------------------------------------------
-\IEEEtitleabstractindextext{%
-    \begin{abstract}
-        Translating natural language into executable SQL (Text-to-SQL) on enterprise-scale databases remains challenging due to schema ambiguity, error-type conflation, and prohibitive LLM inference costs. We present AgentSQL-Asym, a stateful asymmetric multi-agent framework orchestrated as a unified LangGraph State Machine. AgentSQL-Asym addresses these challenges through three key innovations: (1)~an Adaptive Router node that dynamically classifies query complexity to bypass schema exploration for simple queries, minimizing token consumption; (2)~a dual-candidate generation strategy combining DDL and Markdown schema formats with real-time SQLite sandbox evaluation to select optimal initial candidates; and (3)~a Resilient SQL Validator that performs three-tier semantic state evaluations (\textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult}) to drive targeted corrections (up to three loops) with a high-capacity corrector. A round-robin key-rotation mechanism with zero-sleep failover enables sustained high throughput. Empirical evaluation on the BIRD Mini-Dev benchmark demonstrates an Execution Accuracy of 80.00\% on the debit card specialization domain under an asymmetric model budget, validating the cost-efficiency and resilience of our state-machine design.
-    \end{abstract}
-
-    \begin{IEEEkeywords}
-        Text-to-SQL, Large Language Models (LLMs), Multi-Agent Systems, Asymmetric Pipeline, Semantic Schema Pruning, Metadata Enrichment, Self-Correction Guidelines, BIRD Benchmark, Execution Accuracy, Resilient AI Infrastructure.
-    \end{IEEEkeywords}}
-
 \maketitle
-\IEEEdisplaynontitleabstractindextext
-\IEEEpeerreviewmaketitle
+
+\begin{abstract}
+    Translating natural language into executable SQL (Text-to-SQL) on enterprise-scale databases remains challenging due to schema ambiguity, error-type conflation, and prohibitive LLM inference costs. We present AgentSQL-Asym, a stateful asymmetric multi-agent framework orchestrated as a unified LangGraph State Machine. AgentSQL-Asym addresses these challenges through three key innovations: (1)~an Adaptive Router node that dynamically classifies query complexity to bypass schema exploration for simple queries, minimizing token consumption; (2)~a dual-candidate generation strategy combining DDL and Markdown schema formats with real-time SQLite sandbox evaluation to select optimal initial candidates; and (3)~a Resilient SQL Validator that performs three-tier semantic state evaluations (\textsc{SyntaxError}, \textsc{EmptyResult}, and \textsc{NullResult}) to drive targeted corrections (up to three loops) with a high-capacity corrector. A round-robin key-rotation mechanism with zero-sleep failover enables sustained high throughput. Empirical evaluation on the BIRD Mini-Dev benchmark demonstrates an Execution Accuracy of 80.20\% on the full 500-sample set under an asymmetric model budget, validating the cost-efficiency and resilience of our state-machine design.
+\end{abstract}
+
+\begin{IEEEkeywords}
+    Text-to-SQL, large language models, multi-agent systems, asymmetric pipeline, semantic schema pruning, metadata enrichment, self-correction, BIRD benchmark, execution accuracy, resilient AI infrastructure
+\end{IEEEkeywords}
 
 % -----------------------------------------------------------------------------
 % PAPER CONTENT (Modularized)
@@ -60,6 +58,7 @@
 % -----------------------------------------------------------------------------
 % REFERENCES
 % -----------------------------------------------------------------------------
-\printbibliography
+\bibliographystyle{IEEEtranBST2/IEEEtran}
+\bibliography{bib/references}
 
 \end{document}

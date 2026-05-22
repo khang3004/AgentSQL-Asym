@@ -86,21 +86,21 @@
     \draw [arrow] (input)   -- node[label, right] {} (router);
     
     % Router branch 1: COMPLEX (goes straight through Schema Explorer)
-    \draw [arrow] (router)   -- node[label, right] {\textsc{COMPLEX}} (explorer);
+    \draw [arrow] (router)   -- node[label, right] {\textbf{COMPLEX}} (explorer);
     \draw [arrow] (explorer) -- node[label, right] {$\mathcal{S}'_{\mathrm{enriched}}$} (gen);
     
-    % Router branch 2: SIMPLE (bypasses Schema Explorer on the right/left side)
-    % We draw a curved arrow on the left to bypass Node 2 cleanly.
-    \draw [arrow] (router.west) to [out=185, in=175, looseness=1.2] 
-        node[label, left, midway, xshift=-2pt] {\textsc{SIMPLE} (bypass)} 
-        (gen.west);
+    % Router branch 2: SIMPLE (bypasses Schema Explorer on the right side)
+    \coordinate (simple_bypass_east) at ($(router.east)!0.5!(gen.east)+(1.15cm,0)$);
+    \draw [arrow] (router.east) .. controls +(1.45cm,0) and +(1.45cm,0) ..
+        node[label, right, midway, xshift=2pt] {\textbf{SIMPLE} (bypass)}
+        (gen.east);
 
     \draw [arrow] (gen)     -- node[label, right] {$y_0$} (validator);
     
     % PASS path from validator to aligner
     \draw [arrow]
     ([xshift=-8pt]validator.south) --
-    node[label, left] {\textsc{SUCCESS}}
+    node[label, left] {\textbf{SUCCESS}}
     ([xshift=-8pt]aligner.north);
 
     \draw [arrow] (aligner) -- (output);
@@ -122,7 +122,7 @@
         \node[draw=chess_border!60, dashed, line width=1.0pt,
             fill=chess_fill!10, inner sep=12pt,
             rounded corners=10pt,
-            fit=(router)(explorer)(gen)(validator)(corrector)(aligner)] (state_machine_box) {};
+            fit=(router)(explorer)(gen)(validator)(corrector)(aligner)(simple_bypass_east)] (state_machine_box) {};
 
         % Bounding box label rotated on the side
         \node[anchor=center,

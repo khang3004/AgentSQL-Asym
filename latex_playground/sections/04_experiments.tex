@@ -4,7 +4,7 @@
 \subsection{Experimental Setup}
 
 \subsubsection{Benchmark}
-We evaluate AgentSQL-Asym on the full \highlight{BIRD Mini-Dev} benchmark \parencite{li_can_2023}, which contains $N = 500$ unique Text-to-SQL tasks. This benchmark spans across multiple complex relational databases and domains, featuring real-world data challenges such as multi-table joins, date and timestamp parsing, nested subqueries, common table expressions (CTEs), and complex mathematical aggregates. Evaluating on the entire 500-sample Mini-Dev set ensures statistically significant performance profiling and prevents overfitting to localized database domains.
+We evaluate AgentSQL-Asym on the full \highlight{BIRD Mini-Dev} benchmark \cite{li_can_2023}, which contains $N = 500$ unique Text-to-SQL tasks. This benchmark spans across multiple complex relational databases and domains, featuring real-world data challenges such as multi-table joins, date and timestamp parsing, nested subqueries, common table expressions (CTEs), and complex mathematical aggregates. Evaluating on the entire 500-sample Mini-Dev set ensures statistically significant performance profiling and prevents overfitting to localized database domains.
 
 \subsubsection{Model Configuration}
 The asymmetric model allocation of our LangGraph state machine is as follows:
@@ -42,32 +42,34 @@ We present the results of our comprehensive empirical evaluation on the full BIR
     \item \textbf{AgentSQL-Asym (Run 2 - Optimized)}: The fully optimized asymmetric state machine, utilizing DDL cardinality retention, primary/foreign key preservation, progressive checkpointing, and dual-candidate schema-markdown reconciliation.
 \end{enumerate}
 
-\begin{table}[h]
+\begin{table}[t]
     \centering
     \caption{AgentSQL-Asym performance across the entire 500-sample BIRD Mini-Dev set.}
     \label{tab:results_bird_dev}
-    \footnotesize
-    \begin{tabularx}{\columnwidth}{@{}lcccc@{}}
+    \scriptsize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{@{}lrrrr@{}}
         \toprule
-        \textbf{Configuration} & \textbf{EX (\%)} & \textbf{VES (\%)} & \textbf{Soft F1 (\%)} & \textbf{Avg. Latency (s)} \\
+        \textbf{Config.} & \textbf{EX} & \textbf{VES} & \textbf{F1} & \textbf{Lat. (s)} \\
         \midrule
         \textbf{Run 1 (Base)} & 74.80 & 69.15 & 68.50 & 103.28 \\
         \textbf{Run 2 (Optimized)} & 80.20 & 74.50 & 81.10 & 82.40 \\
         \bottomrule
-    \end{tabularx}
+    \end{tabular}
 \end{table}
 
 \subsubsection{Difficulty-Partitioned Results}
 To inspect the capabilities of the asymmetric LangGraph State Machine, we partition the results of Run 2 (Optimized) by query difficulty level across the 500 samples in Table~\ref{tab:results_difficulty}.
 
-\begin{table}[h]
+\begin{table}[t]
     \centering
     \caption{Difficulty-level performance breakdown of AgentSQL-Asym (Run 2).}
     \label{tab:results_difficulty}
-    \footnotesize
-    \begin{tabularx}{\columnwidth}{@{}lccccc@{}}
+    \scriptsize
+    \setlength{\tabcolsep}{2.5pt}
+    \begin{tabular}{@{}lrrrrr@{}}
         \toprule
-        \textbf{Difficulty} & \textbf{Count} & \textbf{EX (\%)} & \textbf{VES (\%)} & \textbf{Soft F1 (\%)} & \textbf{Latency (s)} \\
+        \textbf{Difficulty} & \textbf{N} & \textbf{EX} & \textbf{VES} & \textbf{F1} & \textbf{Lat. (s)} \\
         \midrule
         \textbf{SIMPLE}      & 150 & 92.00 & 88.50 & 92.50 & 42.10 \\
         \textbf{MODERATE}    & 240 & 79.50 & 73.20 & 80.80 & 84.60 \\
@@ -75,7 +77,7 @@ To inspect the capabilities of the asymmetric LangGraph State Machine, we partit
         \midrule
         \textbf{OVERALL}     & 500 & 80.20 & 74.50 & 81.10 & 82.40 \\
         \bottomrule
-    \end{tabularx}
+    \end{tabular}
 \end{table}
 
 We observe that AgentSQL-Asym achieves a stellar \textbf{92.00\% Execution Accuracy (EX)} on \texttt{SIMPLE} queries and a highly competitive \textbf{79.50\%} on \texttt{MODERATE} queries, demonstrating the extreme efficacy of combining CHESS schema filtering, MCI-SQL metadata injection, and resilient corrector loops. The performance level on \texttt{CHALLENGING} queries (65.50\% EX) is particularly noteworthy, outperforming many baseline agent pools that fail under deep nesting or complex aggregation. The slight performance drop on these harder queries highlights lingering limits in SQLite-specific temporal/date functions (such as parsing \texttt{Date} strings in custom formats), which we analyze in Section V.
@@ -95,12 +97,12 @@ To contextualize the performance of \textbf{AgentSQL-Asym}, we compare its archi
             \toprule
             \textbf{Framework} & \textbf{Router?} & \textbf{Pruning?} & \textbf{Sandbox Loops?} & \textbf{BIRD-Dev EX (\%)} & \textbf{BIRD-Test EX (\%)} & \textbf{Asymmetric Strategy \& Candidate Budget} \\
             \midrule
-            \textbf{MAC-SQL} \parencite{wang_mac-sql_2025} & No & No & No & 57.36 & 59.59 & Homogeneous agent pool (Llama/GPT-4), single-path execution. \\
-            \textbf{CHESS} \parencite{talaei_chess_2024} & No & Yes & Yes & 68.31 & 71.10 & Multi-agent with unit-test ranking (Gemini-1.5-Pro, high compute). \\
-            \textbf{ReViSQL} \parencite{zhu2026revisqlachievinghumanleveltexttosql} & No & Yes & Yes & 93.17\textsuperscript{\textdagger} & N/A & RLVR fine-tuned model; expert-cleaned Arcwise-Plat-SQL set (129 candidates). \\
-            \textbf{AGENTIQL} \parencite{heidari_agentiql_2025} & Yes & Yes & Yes & N/A\textsuperscript{\textdagger\textdagger} & N/A\textsuperscript{\textdagger\textdagger} & Test-time scaling via RL reasoning (evaluated on Spider only). \\
-            \textbf{MCI-SQL} \parencite{wang_mci-sql_2026} & No & Yes & Yes & 74.45 & 76.41 & Multi-faceted metadata enrichment with rule-based corrections (9 candidates). \\
-            \textbf{Agentar-Scale-SQL} \parencite{wang_agentar-scale-sql_2025} & Yes & Yes & Yes & 74.90 & 81.67 & Tournament selection over parallel candidates (17 candidates, Qwen-32B). \\
+            \textbf{MAC-SQL} \cite{wang_mac-sql_2025} & No & No & No & 57.36 & 59.59 & Homogeneous agent pool (Llama/GPT-4), single-path execution. \\
+            \textbf{CHESS} \cite{talaei_chess_2024} & No & Yes & Yes & 68.31 & 71.10 & Multi-agent with unit-test ranking (Gemini-1.5-Pro, high compute). \\
+            \textbf{ReViSQL} \cite{zhu2026revisqlachievinghumanleveltexttosql} & No & Yes & Yes & 93.17\textsuperscript{\textdagger} & N/A & RLVR fine-tuned model; expert-cleaned Arcwise-Plat-SQL set (129 candidates). \\
+            \textbf{AGENTIQL} \cite{heidari_agentiql_2025} & Yes & Yes & Yes & N/A\textsuperscript{\textdagger\textdagger} & N/A\textsuperscript{\textdagger\textdagger} & Test-time scaling via RL reasoning (evaluated on Spider only). \\
+            \textbf{MCI-SQL} \cite{wang_mci-sql_2026} & No & Yes & Yes & 74.45 & 76.41 & Multi-faceted metadata enrichment with rule-based corrections (9 candidates). \\
+            \textbf{Agentar-Scale-SQL} \cite{wang_agentar-scale-sql_2025} & Yes & Yes & Yes & 74.90 & 81.67 & Tournament selection over parallel candidates (17 candidates, Qwen-32B). \\
             \midrule
             \textbf{AgentSQL-Asym} (Ours) & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} & \textbf{80.20}* & \textbf{TBD} & Decoupled asymmetric low-cost routing; 2-candidate budget (Gemma-4-31B). \\
             \bottomrule
@@ -115,21 +117,20 @@ To contextualize the performance of \textbf{AgentSQL-Asym}, we compare its archi
 \end{table*}
 
 \subsubsection{The Candidate Budget and Test-Time Scaling Dilemma}
-Many modern SOTA frameworks achieve high performance by running heavy parallel candidates generation loops at inference time. For example, Chase-SQL generates up to 21 parallel candidate queries, Agentar-Scale-SQL \parencite{wang_agentar-scale-sql_2025} synthesizes 17 candidate SQL queries using Qwen-2.5-Coder-32B before running tournament-selection scoring (yielding 74.90\% BIRD-Dev EX and 81.67\% BIRD-Test EX with 77.00\% R-VES), and MCI-SQL \parencite{wang_mci-sql_2026} generates 9 candidates under different temperatures and metadata subsets (yielding 74.45\% BIRD-Dev EX and 76.41\% BIRD-Test EX). While this test-time scaling improves accuracy, it imposes severe computational latency and immense token costs, making it prohibitively expensive for production systems. For instance, generating 129 candidates for 500 questions implies 64,500 LLM generation calls.
+Many modern SOTA frameworks achieve high performance by running heavy parallel candidates generation loops at inference time. For example, Chase-SQL generates up to 21 parallel candidate queries, Agentar-Scale-SQL \cite{wang_agentar-scale-sql_2025} synthesizes 17 candidate SQL queries using Qwen-2.5-Coder-32B before running tournament-selection scoring (yielding 74.90\% BIRD-Dev EX and 81.67\% BIRD-Test EX with 77.00\% R-VES), and MCI-SQL \cite{wang_mci-sql_2026} generates 9 candidates under different temperatures and metadata subsets (yielding 74.45\% BIRD-Dev EX and 76.41\% BIRD-Test EX). While this test-time scaling improves accuracy, it imposes severe computational latency and immense token costs, making it prohibitively expensive for production systems. For instance, generating 129 candidates for 500 questions implies 64,500 LLM generation calls.
 
 In contrast, AgentSQL-Asym utilizes a strict \textbf{2-candidate budget} (comparing a standard DDL candidate against a schema-markdown comment candidate), routed dynamically via a lightweight complexity classifier. This achieves a highly competitive EX of \textbf{80.20\%} on the full 500-sample BIRD Mini-Dev set while keeping average latency down to \textbf{82.40 seconds} and reducing API token expenditures by orders of magnitude. Unlike Agentar-Scale-SQL which relies on expensive homogeneous GPT-4 or Qwen-32B parallel reasoning API setups, AgentSQL-Asym utilizes cheap, fast models for routing and alignment, reserving premium models strictly for generation and conditional correction.
 
 \subsubsection{Training Paradigm vs. In-Context State Machine}
-Furthermore, ReViSQL \parencite{zhu2026revisqlachievinghumanleveltexttosql} achieves human parity (93.17\% EX on Arcwise-Plat-SQL) by utilizing RLVR (Reinforcement Learning with Verifiable Rewards) on their manually curated BIRD-Verified dataset, which corrects 52.1\% of original noisy gold SQL annotations in BIRD Train. They prove that data curation is a stronger bottleneck than prompt engineering. However, RLVR training is extremely resource-intensive, requiring fine-tuning 235B models on massive computing clusters.
+Furthermore, ReViSQL \cite{zhu2026revisqlachievinghumanleveltexttosql} achieves human parity (93.17\% EX on Arcwise-Plat-SQL) by utilizing RLVR (Reinforcement Learning with Verifiable Rewards) on their manually curated BIRD-Verified dataset, which corrects 52.1\% of original noisy gold SQL annotations in BIRD Train. They prove that data curation is a stronger bottleneck than prompt engineering. However, RLVR training is extremely resource-intensive, requiring fine-tuning 235B models on massive computing clusters.
 
 AgentSQL-Asym demonstrates that similar robust performance can be achieved without offline fine-tuning or premium training resources. By preserving critical primary/foreign key connections and dynamically injecting column cardinalities (e.g., from our MCI-inspired range profiles and CHESS-inspired schema pruner), we present a highly compressed, unambiguous DDL schema to the off-the-shelf \texttt{gemma-4-31b-it} model. This zero-shot/few-shot in-context learning state machine achieves 80.20\% EX, showing that robust semantic formatting and state-machine-driven verification can bridge the gap without expensive training pipelines.
 
 \subsubsection{Verifiable Feedback Loops: Sandboxed Execution vs. LLM Unit Tests}
-CHESS \parencite{talaei_chess_2024} relies on generating unit tests using an LLM, then evaluating candidate SQL queries against these tests (which checks if the SQL query returns specific values or mentions certain columns). This process requires generating multiple tests, evaluating each candidate, and incurs significant LLM reasoning costs and latency.
+CHESS \cite{talaei_chess_2024} relies on generating unit tests using an LLM, then evaluating candidate SQL queries against these tests (which checks if the SQL query returns specific values or mentions certain columns). This process requires generating multiple tests, evaluating each candidate, and incurs significant LLM reasoning costs and latency.
 
 AgentSQL-Asym introduces a sandboxed local executor that validates candidate queries directly against the real SQLite engine. Our Resilient SQL Validator captures direct database execution signals---including standard \texttt{SyntaxError}, \texttt{EmptyResult}, and \texttt{NullResult} warnings. If a query fails, the validator sends a highly structured error message to our Targeted Resilient Corrector (\texttt{gpt-oss-120b}), which executes targeted local modifications. This sandboxed feedback loop operates without generating speculative unit tests, ensuring fast, deterministic, and cost-effective error recovery.
 
 \subsubsection{Resolving the AGENTIQL Benchmarking Misattribution}
-Crucially, our analysis resolves a common misattribution in existing Text-to-SQL reviews. Prior reviews have incorrectly cited BIRD performance metrics for AGENTIQL \parencite{heidari_agentiql_2025}. By auditing the original AGENTIQL text, we confirm that AGENTIQL does not present BIRD benchmark evaluations, stating in Section 4 that ``testing AGENTIQL on additional benchmarks (e.g., BIRD or SQL-Eval) will be important to assess the generalizability of the findings'' and focusing instead entirely on Spider (reaching up to 86.07\% EX on Spider with 14B models). Our comparison is the first to explicitly clarify this domain limitation, demonstrating the robustness of AgentSQL-Asym on the multi-database, real-world database environments of BIRD.
-
+Crucially, our analysis resolves a common misattribution in existing Text-to-SQL reviews. Prior reviews have incorrectly cited BIRD performance metrics for AGENTIQL \cite{heidari_agentiql_2025}. By auditing the original AGENTIQL text, we confirm that AGENTIQL does not present BIRD benchmark evaluations, stating in Section 4 that ``testing AGENTIQL on additional benchmarks (e.g., BIRD or SQL-Eval) will be important to assess the generalizability of the findings'' and focusing instead entirely on Spider (reaching up to 86.07\% EX on Spider with 14B models). Our comparison is the first to explicitly clarify this domain limitation, demonstrating the robustness of AgentSQL-Asym on the multi-database, real-world database environments of BIRD.
 
