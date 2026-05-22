@@ -1,0 +1,170 @@
+{
+    "overall_metrics": {
+        "ex_accuracy": 80.0,
+        "valid_execution_score": 70.62,
+        "soft_f1_score": 80.0,
+        "average_latency": 93.79,
+        "total_token_usage": 36000,
+        "count": 10
+    },
+    "difficulty_metrics": {
+        "simple": {
+            "ex_accuracy": 100.0,
+            "valid_execution_score": 86.6,
+            "soft_f1_score": 100.0,
+            "average_latency": 64.48,
+            "count": 3
+        },
+        "moderate": {
+            "ex_accuracy": 100.0,
+            "valid_execution_score": 89.95,
+            "soft_f1_score": 100.0,
+            "average_latency": 100.12,
+            "count": 4
+        },
+        "challenging": {
+            "ex_accuracy": 33.33,
+            "valid_execution_score": 28.87,
+            "soft_f1_score": 33.33,
+            "average_latency": 114.66,
+            "count": 3
+        }
+    },
+    "results": [
+        {
+            "question_id": 1471,
+            "db_id": "debit_card_specializing",
+            "question": "What is the ratio of customers who pay in EUR against customers who pay in CZK?",
+            "ground_truth": "SELECT CAST(SUM(IIF(Currency = 'EUR', 1, 0)) AS FLOAT) / SUM(IIF(Currency = 'CZK', 1, 0)) AS ratio FROM customers",
+            "predicted": "SELECT CAST(SUM(CASE WHEN Currency = 'EUR' THEN 1 ELSE 0 END) AS FLOAT) / NULLIF(SUM(CASE WHEN Currency = 'CZK' THEN 1 ELSE 0 END),0) AS ratio FROM customers;",
+            "is_correct": true,
+            "f1_score": 1.0,
+            "ves_reward": 0.75,
+            "iterations": 1,
+            "latency": 57.35109853744507,
+            "difficulty": "simple"
+        },
+        {
+            "question_id": 1472,
+            "db_id": "debit_card_specializing",
+            "question": "In 2012, who had the least consumption in LAM?",
+            "ground_truth": "SELECT T1.CustomerID FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Segment = 'LAM' AND SUBSTR(T2.Date, 1, 4) = '2012' GROUP BY T1.CustomerID ORDER BY SUM(T2.Consumption) ASC LIMIT 1",
+            "predicted": "SELECT c.CustomerID FROM customers c JOIN yearmonth y ON c.CustomerID = y.CustomerID WHERE c.Segment = 'LAM' AND y.Date BETWEEN '201201' AND '201212' GROUP BY c.CustomerID ORDER BY SUM(y.Consumption) ASC LIMIT 1;",
+            "is_correct": true,
+            "f1_score": 1.0,
+            "ves_reward": 0.75,
+            "iterations": 1,
+            "latency": 69.68546438217163,
+            "difficulty": "moderate"
+        },
+        {
+            "question_id": 1473,
+            "db_id": "debit_card_specializing",
+            "question": "What was the average monthly consumption of customers in SME for the year 2013?",
+            "ground_truth": "SELECT AVG(T2.Consumption) / 12 FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE SUBSTR(T2.Date, 1, 4) = '2013' AND T1.Segment = 'SME'",
+            "predicted": "SELECT AVG(Consumption) / 12 AS avg_monthly_consumption FROM yearmonth ym JOIN customers c ON ym.CustomerID = c.CustomerID WHERE c.Segment = 'SME' AND ym.Date BETWEEN '201301' AND '201312';",
+            "is_correct": true,
+            "f1_score": 1.0,
+            "ves_reward": 0.75,
+            "iterations": 1,
+            "latency": 127.91928601264954,
+            "difficulty": "moderate"
+        },
+        {
+            "question_id": 1476,
+            "db_id": "debit_card_specializing",
+            "question": "What was the difference in gas consumption between CZK-paying customers and EUR-paying customers in 2012?",
+            "ground_truth": "SELECT SUM(IIF(T1.Currency = 'CZK', T2.Consumption, 0)) - SUM(IIF(T1.Currency = 'EUR', T2.Consumption, 0)) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE SUBSTR(T2.Date, 1, 4) = '2012'",
+            "predicted": "SELECT SUM(CASE WHEN c.Currency = 'CZK' THEN ym.Consumption ELSE 0 END) - SUM(CASE WHEN c.Currency = 'EUR' THEN ym.Consumption ELSE 0 END) AS difference FROM yearmonth ym JOIN customers c ON ym.CustomerID = c.CustomerID WHERE ym.Date BETWEEN '201201' AND '201212';",
+            "is_correct": true,
+            "f1_score": 1.0,
+            "ves_reward": 0.75,
+            "iterations": 1,
+            "latency": 77.02908658981323,
+            "difficulty": "challenging"
+        },
+        {
+            "question_id": 1479,
+            "db_id": "debit_card_specializing",
+            "question": "Which year recorded the most consumption of gas paid in CZK?",
+            "ground_truth": "SELECT SUBSTR(T2.Date, 1, 4) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Currency = 'CZK' GROUP BY SUBSTR(T2.Date, 1, 4) ORDER BY SUM(T2.Consumption) DESC LIMIT 1",
+            "predicted": "SELECT SUBSTR(Date, 1, 4) AS Year FROM yearmonth GROUP BY Year ORDER BY SUM(Consumption) DESC LIMIT 1;",
+            "is_correct": true,
+            "f1_score": 1.0,
+            "ves_reward": 1.0,
+            "iterations": 1,
+            "latency": 126.27850866317749,
+            "difficulty": "moderate"
+        },
+        {
+            "question_id": 1480,
+            "db_id": "debit_card_specializing",
+            "question": "What was the gas consumption peak month for SME customers in 2013?",
+            "ground_truth": "SELECT SUBSTR(T2.Date, 5, 2) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE SUBSTR(T2.Date, 1, 4) = '2013' AND T1.Segment = 'SME' GROUP BY SUBSTR(T2.Date, 5, 2) ORDER BY SUM(T2.Consumption) DESC LIMIT 1",
+            "predicted": "SELECT SUBSTR(T1.Date,5,2) AS month FROM yearmonth AS T1 JOIN customers AS T2 ON T1.CustomerID = T2.CustomerID WHERE T2.Segment = 'SME' AND T1.Date BETWEEN '201301' AND '201312' GROUP BY month ORDER BY SUM(T1.Consumption) DESC LIMIT 1;",
+            "is_correct": true,
+            "f1_score": 1.0,
+            "ves_reward": 0.75,
+            "iterations": 2,
+            "latency": 76.58491325378418,
+            "difficulty": "moderate",
+            "token_usage": 5000
+        },
+        {
+            "question_id": 1481,
+            "db_id": "debit_card_specializing",
+            "question": "What is the difference in the annual average consumption of the customers with the least amount of consumption paid in CZK for 2013 between SME and LAM, LAM and KAM, and KAM and SME?",
+            "ground_truth": "SELECT CAST(SUM(IIF(T1.Segment = 'SME', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) - CAST(SUM(IIF(T1.Segment = 'LAM', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) , CAST(SUM(IIF(T1.Segment = 'LAM', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) - CAST(SUM(IIF(T1.Segment = 'KAM', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) , CAST(SUM(IIF(T1.Segment = 'KAM', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) - CAST(SUM(IIF(T1.Segment = 'SME', T2.Consumption, 0)) AS REAL) / COUNT(T1.CustomerID) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID WHERE T1.Currency = 'CZK' AND T2.Consumption = ( SELECT MIN(Consumption) FROM yearmonth ) AND T2.Date BETWEEN 201301 AND 201312",
+            "predicted": "SELECT 1;",
+            "is_correct": false,
+            "f1_score": 0,
+            "ves_reward": 0.0,
+            "iterations": 3,
+            "latency": 132.80786561965942,
+            "difficulty": "challenging",
+            "token_usage": 7000
+        },
+        {
+            "question_id": 1482,
+            "db_id": "debit_card_specializing",
+            "question": "Which of the three segments\u2014SME, LAM and KAM\u2014has the biggest and lowest percentage increases in consumption paid in EUR between 2012 and 2013?",
+            "ground_truth": "SELECT CAST((SUM(IIF(T1.Segment = 'SME' AND T2.Date LIKE '2013%', T2.Consumption, 0)) - SUM(IIF(T1.Segment = 'SME' AND T2.Date LIKE '2012%', T2.Consumption, 0))) AS FLOAT) * 100 / SUM(IIF(T1.Segment = 'SME' AND T2.Date LIKE '2012%', T2.Consumption, 0)), CAST(SUM(IIF(T1.Segment = 'LAM' AND T2.Date LIKE '2013%', T2.Consumption, 0)) - SUM(IIF(T1.Segment = 'LAM' AND T2.Date LIKE '2012%', T2.Consumption, 0)) AS FLOAT) * 100 / SUM(IIF(T1.Segment = 'LAM' AND T2.Date LIKE '2012%', T2.Consumption, 0)) , CAST(SUM(IIF(T1.Segment = 'KAM' AND T2.Date LIKE '2013%', T2.Consumption, 0)) - SUM(IIF(T1.Segment = 'KAM' AND T2.Date LIKE '2012%', T2.Consumption, 0)) AS FLOAT) * 100 / SUM(IIF(T1.Segment = 'KAM' AND T2.Date LIKE '2012%', T2.Consumption, 0)) FROM customers AS T1 INNER JOIN yearmonth AS T2 ON T1.CustomerID = T2.CustomerID",
+            "predicted": "WITH consumption AS ( SELECT c.Segment, substr(y.Date,1,4) AS yr, SUM(y.Consumption) AS total FROM yearmonth y JOIN customers c ON y.CustomerID = c.CustomerID WHERE c.Currency = 'EUR' GROUP BY c.Segment, yr ), seg_year AS ( SELECT Segment, MAX(CASE WHEN yr = '2012' THEN total END) AS cons2012, MAX(CASE WHEN yr = '2013' THEN total END) AS cons2013 FROM consumption GROUP BY Segment ), percent AS ( SELECT Segment, ((cons2013 - cons2012) * 100.0 / NULLIF(cons2013,0)) AS pct_increase FROM seg_year ) SELECT Segment, pct_increase FROM percent ORDER BY pct_increase DESC LIMIT 1;",
+            "is_correct": false,
+            "f1_score": 0,
+            "ves_reward": 0.0,
+            "iterations": 3,
+            "latency": 134.14370131492615,
+            "difficulty": "challenging",
+            "token_usage": 7000
+        },
+        {
+            "question_id": 1483,
+            "db_id": "debit_card_specializing",
+            "question": "How much did customer 6 consume in total between August and November 2013?",
+            "ground_truth": "SELECT SUM(Consumption) FROM yearmonth WHERE CustomerID = 6 AND Date BETWEEN '201308' AND '201311'",
+            "predicted": "SELECT SUM(Consumption) FROM yearmonth WHERE CustomerID = 6 AND Date BETWEEN '201308' AND '201311';",
+            "is_correct": true,
+            "f1_score": 1.0,
+            "ves_reward": 0.75,
+            "iterations": 0,
+            "latency": 49.06571364402771,
+            "difficulty": "simple",
+            "token_usage": 1000
+        },
+        {
+            "question_id": 1484,
+            "db_id": "debit_card_specializing",
+            "question": "How many more \"discount\" gas stations does the Czech Republic have compared to Slovakia?",
+            "ground_truth": "SELECT SUM(IIF(Country = 'CZE', 1, 0)) - SUM(IIF(Country = 'SVK', 1, 0)) FROM gasstations WHERE Segment = 'Discount'",
+            "predicted": "SELECT (SELECT COUNT(*) FROM gasstations WHERE Country = 'CZE' AND Segment = 'Discount') - (SELECT COUNT(*) FROM gasstations WHERE Country = 'SVK' AND Segment = 'Discount');",
+            "is_correct": true,
+            "f1_score": 1.0,
+            "ves_reward": 0.75,
+            "iterations": 0,
+            "latency": 87.02880382537842,
+            "difficulty": "simple",
+            "token_usage": 1000
+        }
+    ]
+}
