@@ -1,4 +1,4 @@
-\section{Methodology}
+\section{Method}
 \label{sec:method}
 
 \subsection{Problem Formulation}
@@ -10,7 +10,7 @@ We formulate the Text-to-SQL task over a relational database $\mathcal{D} = (\ma
 where $\mathcal{S}'_{\mathrm{enriched}}$ is the dynamically constructed database context assembled by the active graph.
 
 \subsection{Architecture Overview: The Asymmetric LangGraph State Machine}
-Rather than orchestrating static sequential pipelines, we model the Text-to-SQL workflow as a unified, stateful \textbf{LangGraph State Machine} ($\mathcal{G}$). The state of the system is governed by a persistent \texttt{State} dictionary:
+The overall system architecture and the state transition flow of our proposed framework is illustrated in Fig.~\ref{fig:workflow}. Rather than orchestrating static sequential pipelines, we model the Text-to-SQL workflow as a unified, stateful \textbf{LangGraph State Machine} ($\mathcal{G}$). The state of the system is governed by a persistent \texttt{State} dictionary:
 \begin{equation}
     \mathbf{X} = \left\langle Q, \; \mathcal{D}_{\mathrm{path}}, \; \mathcal{C}, \; \mathbf{H}, \; \{y_k\}, \; \hat{y}, \; e_i, \; t_i \right\rangle
 \end{equation}
